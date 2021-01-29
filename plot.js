@@ -103,13 +103,10 @@ document.addEventListener('DOMContentLoaded', () => {
     }
     let i = hull.length;
     if (i) {
-      let h1, h2 = point(hull[--i]);
-      while (i) {
-        h1 = h2;
-        h2 = point(hull[--i]);
-        points_on_edge(...h1, ...h2);
-      }
-      points_on_edge(...h2, ...point(hull[hull.length-1]));
+      let h = point(hull[--i]);
+      while (i)
+        points_on_edge(...h, ...(h = point(hull[--i])));
+      points_on_edge(...h, ...point(hull[hull.length-1]));
     }
   }
 
