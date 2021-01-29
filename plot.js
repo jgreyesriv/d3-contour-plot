@@ -19,19 +19,10 @@ document.addEventListener('DOMContentLoaded', () => {
   const sz = d3.scaleLinear()
     .domain(d3.extent(data, d => d[2])).nice()
     .range(ry);
-  // const sc = d3.scaleSequential(d3.interpolateViridis)
-  //   .domain(sz.domain());
-  // const sn = d3.scaleLinear()
-  //   .domain([0,ncont-1])
-  //   .range(sz.domain());
-  //   // .clamp(true);
   const sc = d3.scaleSequential(d3.interpolateRdYlGn)
     .domain(sz.domain());
   const scn = d3.scaleSequential(d3.interpolateRdYlGn)
     .domain([0,ncont-1]);
-  // const sn = d3.scaleQuantize()
-  //   .domain(sz.domain())
-  //   .range([ncont,0]);
 
   const svg = d3.select('#main').append('svg')
     .attrs({ viewBox: [0,0,width,height], width: width, height: height });
@@ -84,64 +75,41 @@ document.addEventListener('DOMContentLoaded', () => {
       fill: sc(d[2])
     }));
 
-  // console.log(delaunay.triangles);
-  // console.log(delaunay.triangles.slice(0,3));
-  // console.log(Array.from(delaunay.triangles.slice(0,3)).map(i => data[i]));
-
-  // svg.append('g').selectAll('circle').data(
-  //   Array.from(delaunay.triangles.slice(0,3)).map(i => data[i])
-  // ).join('circle')
-  //   .attrs({ cx: d => sx(d[0]), cy: d => sy(d[1]), r: 2, fill: 'red'});
-  // svg.append('g').selectAll('circle').data(
-  //   delaunay.triangles.slice(3,6)
-  // ).join('circle')
-  //   .attrs({ cx: i => sx(data[i][0]), cy: i => sy(data[i][1]), r: 1, fill: 'white'});
-
-  const edges = [ ];
-  { const {points, halfedges, triangles, hull} = delaunay;
-    for (let i = 0, n = halfedges.length; i < n; ++i) {
-      const j = halfedges[i];
-      if (j < i) continue;
-      let ti = triangles[i];
-      let tj = triangles[j];
-      const zi = data[ti][2];
-      const zj = data[tj][2];
-      edges.push([
-        [ points[ti*=2], points[ti + 1], zi ],
-        [ points[tj*=2], points[tj + 1], zj ]
-        // [ sx(data[ti][0]), sy(data[ti][1]) ],
-        // [ sx(data[tj][0]), sy(data[tj][1]) ]
-      ].sort((a,b) => a[2]-b[2]));
-    }
-    // let h = hull[0];
-    // for (let i = 0, n = hull.length; i < n; ++i) {
-    // }
-  }
-  // edges.sort();
-  // for (let i=0, n=edges.length-1; i<n; ++i)
-  //   if (edges[i]==edges[i+1]) console.log(edges[i]);
-
-  // svg.append('g').selectAll('path').data(edges).join('path')
-  //   .attrs({
-  //     d: d => `M${d[0][0]} ${d[0][1]}L${d[1][0]} ${d[1][1]}`,
-  //     fill: 'none', stroke: '#000'
-  //   });
-
   const [z0,z3] = sz.domain();
   const dz = (z3-z0)/ncont;
 
   const cont_pts = [ ];
 
-  for (let ei=edges.length; ei; ) {
-    const e = edges[--ei];
-    const [x1,y1,z1] = e[0],
-          [x2,y2,z2] = e[1];
+  const points_on_edge = ((x1,y1,z1,x2,y2,z2) => {
+    if (z1 > z2) [x1,y1,z1,x2,y2,z2] = [x2,y2,z2,x1,y1,z1];
     const dxdz = (x2-x1)/(z2-z1), x0 = x1 - dxdz*z1;
     const dydz = (y2-y1)/(z2-z1), y0 = y1 - dydz*z1;
     for (let i=Math.ceil((z1-z0)/dz); ; ++i) {
       const z = z0 + i*dz;
       if (z > z2) break;
       cont_pts.push([ x0 + dxdz*z, y0 + dydz*z, i ]);
+    }
+  });
+
+  { const {points, halfedges, triangles, hull} = delaunay;
+    const point = (i => {
+      const z = data[i][2];
+      return [ points[i*=2], points[i+1], z ];
+    });
+    for (let i=halfedges.length; i; ) { --i;
+      const j = halfedges[i];
+      if (j < i) continue;
+      points_on_edge(...point(triangles[i]), ...point(triangles[j]));
+    }
+    let i = hull.length;
+    if (i) {
+      let h1, h2 = point(hull[--i]);
+      while (i) {
+        h1 = h2;
+        h2 = point(hull[--i]);
+        points_on_edge(...h1, ...h2);
+      }
+      points_on_edge(...h2, ...point(hull[hull.length-1]));
     }
   }
 
