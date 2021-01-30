@@ -131,17 +131,34 @@ document.addEventListener('DOMContentLoaded', () => {
 
   const chains = [ ];
 
+  const tr = [ ];
+
   for (let i=0, n=cont_pts.length; i<n; ++i) {
     const pi = cont_pts[i];
     if (pi===null) continue;
     let t = pi[2];
     if (t==null) continue;
     t = [ t, halfedges[t] ];
-    const v = [ pi[0], pi[1], null, null ];
+    console.log(t);
 
-    for (let k=(t[1] < t[0] ? 1 : 2); k; ) {
+    tr.push(t[0]);
+    tr.push(t[1]);
+
+    console.log(t.map(t => {
+      t -= t%3;
+      return [
+        triangles[t+0],
+        triangles[t+1],
+        triangles[t+2]
+      ];
+    }));
+
+    const v = [ triangles[t[0]], triangles[t[1]], null, null ];
+
+    for (let k=2; k; ) {
       for (let l=t[--k];;) {
         if (!((++l)%3)) l-=3;
+        console.log(l);
         const p = triangles[l];
         if (p!==v[1-k]) {
           v[2+k] = p;
@@ -149,31 +166,51 @@ document.addEventListener('DOMContentLoaded', () => {
         }
       }
     }
+    console.log(v);
 
+    /*
+    tr.push([v[0],v[1],v[2]]);
+    if (v[3]!==null) tr.push([v[0],v[1],v[3]]);
+    */
+
+    cont_pts[i] = null;
     linking_loop:
-    for (let l=2, nl=(v[3]==null ? 3 : 4); l<nl; ++l) {
+    for (let l=2; l<4; ++l) {
       for (let k=0; k<2; ++k) {
         const u = [ v[k], v[l] ].sort();
-        let j = cont_pts.findIndex(p => p && p[0]===u[0] && p[1]===u[1]);
+        console.log(u);
+        let j = cont_pts.findIndex( // TODO: binary search
+          p => p && p[0]===u[0] && p[1]===u[1] && p[5]===pi[5]
+        );
         if (j===-1) continue;
-
-        for (let pj = cont_pts[j];;) {
-          if (pi[5] === pj[5]) {
-            pj.push(pi);
-            if (pi.push(pj) == 8) break linking_loop;
-            break;
-          }
-          while (!(pj = cont_pts[++j])) { }
-          if (pj[0]!==u[0] || pj[1]!==u[1]) break;
+        const pj = cont_pts[j];
+        pi.push(pj);
+        pj.push(pi);
+        if (pj[2]==null) {
+          cont_pts[j] = null;
+          chains.push(pj);
         }
+        if (pi.length===8) break linking_loop;
       }
     }
-    cont_pts[i] = null;
 
-    if (pi.length == 7) chains.push(pi);
+    // if (pi.length == 7) chains.push(pi);
     // TODO: avoid duplicating open chains
     // TODO: don't miss closed chains
+
+    break;
   }
+
+  tr.sort();
+
+  svg.append('g')
+    .selectAll('path').data(tr).join('path')
+    .attr('d',t => {
+      t -= t%3;
+      return `M${points[triangles[t+0]*2]} ${points[triangles[t+0]*2+1]}` +
+             `L${points[triangles[t+1]*2]} ${points[triangles[t+1]*2+1]}` +
+             `L${points[triangles[t+2]*2]} ${points[triangles[t+2]*2+1]}z`;
+    }).styles({fill: 'gray', opacity: 0.3});
 
   svg.append('g').style('fill','none')
     .selectAll('path').data(chains).join('path')
