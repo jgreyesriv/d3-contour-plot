@@ -19,6 +19,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const sz = d3.scaleLinear()
     .domain(d3.extent(data, d => d[2])).nice()
     .range(ry);
+  // https://github.com/d3/d3-scale-chromatic
   const sc = d3.scaleSequential(d3.interpolateTurbo) // Viridis, RdYlGn
     .domain(sz.domain());
   const scn = d3.scaleSequential(d3.interpolateTurbo)
