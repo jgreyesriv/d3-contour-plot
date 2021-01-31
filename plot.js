@@ -69,12 +69,6 @@ document.addEventListener('DOMContentLoaded', () => {
     stroke: '#000'
   });
 
-  // svg.append('g').selectAll('circle').data(data).join('circle')
-  //   .attrs(d => ({
-  //     cx: sx(d[0]), cy: sy(d[1]), r: 1,
-  //     fill: sc(d[2])
-  //   }));
-
   const [z0,z3] = sz.domain();
   const dz = (z3-z0)/ncont;
 
@@ -90,7 +84,7 @@ document.addEventListener('DOMContentLoaded', () => {
       if (z > p2[2]) break;
       let v1 = p1[3], v2 = p2[3];
       if (v1 > v2) [v1,v2] = [v2,v1];
-      cont_pts.push([ v1, v2, t, x0 + dxdz*z, y0 + dydz*z, c ]);
+      cont_pts.push([ v1, v2, c, t, x0 + dxdz*z, y0 + dydz*z ]);
     }
   });
 
@@ -107,122 +101,77 @@ document.addEventListener('DOMContentLoaded', () => {
         points_on_edge(h, (h = point(hull[--i])));
     }
   }
-  cont_pts.sort(([a, b], [c, d]) => a - c || b - d);
+  cont_pts.sort(([a1,a2,a3],[b1,b2,b3]) => a1-b1 || a2-b2 || a3-b3);
 
   svg.append('g').selectAll('circle').data(cont_pts).join('circle')
     .attrs(p => ({
-      cx: p[3], cy: p[4], r: 2,
-      fill: scn(p[5])
+      cx: p[4], cy: p[5], r: 2,
+      fill: scn(p[2])
     }));
-
-  // svg.append('g').selectAll('circle').data(cont_pts.slice(0,3)).join('circle')
-  //   .attrs(d => ({
-  //     cx: d[0], cy: d[1], r: 4,
-  //     fill: scn(d[2]), stroke: 'black', 'stroke-width': 1
-  //   }));
-
-  // cont_pts.sort((a,b) => a[3]-b[3]);
-  // for (let i=0, n=triangles.length; i<n; i+=3) {
-  //   const t = [ triangles[i], triangles[i+1], triangles[i+2] ];
-  //
-  // }
-
-  // console.table(cont_pts);
 
   const chains = [ ];
 
-  const tr = [ ];
-
-  for (let i=0, n=cont_pts.length; i<n; ++i) {
+  // TODO: test for only 3 points
+  for (let i=0, n=cont_pts.length, prev_t, v; i<n; ++i) {
     const pi = cont_pts[i];
     if (pi===null) continue;
-    let t = pi[2];
+    let t = pi[3];
     if (t==null) continue;
-    t = [ t, halfedges[t] ];
-    console.log(t);
+    if (t!==prev_t) {
+      prev_t = t;
+      t = [ t, halfedges[t] ];
+      v = [ triangles[t[0]], triangles[t[1]], null, null ];
 
-    tr.push(t[0]);
-    tr.push(t[1]);
-
-    console.log(t.map(t => {
-      t -= t%3;
-      return [
-        triangles[t+0],
-        triangles[t+1],
-        triangles[t+2]
-      ];
-    }));
-
-    const v = [ triangles[t[0]], triangles[t[1]], null, null ];
-
-    for (let k=2; k; ) {
-      for (let l=t[--k];;) {
-        if (!((++l)%3)) l-=3;
-        console.log(l);
-        const p = triangles[l];
-        if (p!==v[1-k]) {
-          v[2+k] = p;
-          break;
+      for (let k=2; k; ) {
+        for (let l=t[--k];;) {
+          if (!((++l)%3)) l-=3;
+          const p = triangles[l];
+          if (p!==v[1-k]) {
+            v[2+k] = p;
+            break;
+          }
         }
       }
     }
-    console.log(v);
-
-    /*
-    tr.push([v[0],v[1],v[2]]);
-    if (v[3]!==null) tr.push([v[0],v[1],v[3]]);
-    */
 
     cont_pts[i] = null;
     linking_loop:
     for (let l=2; l<4; ++l) {
       for (let k=0; k<2; ++k) {
-        const u = [ v[k], v[l] ].sort();
-        console.log(u);
+        const u = [ v[k], v[l] ];
+        if (u[0] > u[1]) [u[0],u[1]] = [u[1],u[0]];
         let j = cont_pts.findIndex( // TODO: binary search
-          p => p && p[0]===u[0] && p[1]===u[1] && p[5]===pi[5]
+          p => p && p[0]===u[0] && p[1]===u[1] && p[2]===pi[2]
         );
         if (j===-1) continue;
         const pj = cont_pts[j];
         pi.push(pj);
         pj.push(pi);
-        if (pj[2]==null) {
+        if (pj[3]==null) {
           cont_pts[j] = null;
           chains.push(pj);
+        } else if (pj.length===8) {
+          cont_pts[j] = null;
         }
+        // TODO: avoid duplicating open chains
+        // TODO: don't miss closed chains
         if (pi.length===8) break linking_loop;
       }
     }
 
-    // if (pi.length == 7) chains.push(pi);
-    // TODO: avoid duplicating open chains
-    // TODO: don't miss closed chains
-
-    break;
   }
-
-  tr.sort();
-
-  svg.append('g')
-    .selectAll('path').data(tr).join('path')
-    .attr('d',t => {
-      t -= t%3;
-      return `M${points[triangles[t+0]*2]} ${points[triangles[t+0]*2+1]}` +
-             `L${points[triangles[t+1]*2]} ${points[triangles[t+1]*2+1]}` +
-             `L${points[triangles[t+2]*2]} ${points[triangles[t+2]*2+1]}z`;
-    }).styles({fill: 'gray', opacity: 0.3});
 
   svg.append('g').style('fill','none')
     .selectAll('path').data(chains).join('path')
     .attrs(p0 => {
-      let path = `M${p0[3]} ${p0[4]}`;
+      let path = `M${p0[4]} ${p0[5]}`;
       let prev = p0, p = p0[6];
       for (;;) {
-        path += `L${p[3]} ${p[4]}`;
+        path += `L${p[4]} ${p[5]}`;
         if (p.length==7) break;
         const i = p[6]==prev ? 7 : 6;
         p = (prev = p)[i];
       }
-      return { d: path, stroke: scn(p[5]) };
+      return { d: path, stroke: scn(p[2]) };
     });
 });
