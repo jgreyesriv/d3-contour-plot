@@ -3,7 +3,7 @@ document.addEventListener('DOMContentLoaded', () => {
         width  = 500 + margin.left + margin.right + margin.z,
         height = 500 + margin.bottom + margin.top;
 
-  const ncont = 7;
+  const ncont = 14;
 
   const sx = d3.scaleLinear()
     .domain(d3.extent(data, d => d[0])).nice()
@@ -19,9 +19,9 @@ document.addEventListener('DOMContentLoaded', () => {
   const sz = d3.scaleLinear()
     .domain(d3.extent(data, d => d[2])).nice()
     .range(ry);
-  const sc = d3.scaleSequential(d3.interpolateRdYlGn)
+  const sc = d3.scaleSequential(d3.interpolateTurbo) // Viridis, RdYlGn
     .domain(sz.domain());
-  const scn = d3.scaleSequential(d3.interpolateRdYlGn)
+  const scn = d3.scaleSequential(d3.interpolateTurbo)
     .domain([0,ncont-1]);
 
   const svg = d3.select('#main').append('svg')
@@ -144,34 +144,65 @@ document.addEventListener('DOMContentLoaded', () => {
           p => p && p[0]===u[0] && p[1]===u[1] && p[2]===pi[2]
         );
         if (j===-1) continue;
-        const pj = cont_pts[j];
+        let pj = cont_pts[j];
         pi.push(pj);
         pj.push(pi);
-        if (pj[3]==null) {
+        if (pj[3]==null) { // check if chain is complete
           cont_pts[j] = null;
-          chains.push(pj);
-        } else if (pj.length===8) {
+          let prev = pj, p = pj[6];
+          for (;;) {
+            if (p.length < 8) {
+              if (p[3]==null) chains.push(pj);
+              break;
+            }
+            const i = p[6]==prev ? 7 : 6;
+            p = (prev = p)[i];
+          }
+        } if (pj.length===8) {
           cont_pts[j] = null;
+          let prev = pj, p = pj[6];
+          for (;;) {
+            if (p.length < 8) {
+              if (p[3]!=null) break;
+              if (pj[3]==null) {
+                chains.push(pj);
+                break;
+              }
+              prev = p;
+              p = pj[7];
+              pj = prev;
+              continue;
+            }
+            if (p===pj) {
+              chains.push(pj);
+              break;
+            }
+            const i = p[6]==prev ? 7 : 6;
+            p = (prev = p)[i];
+          }
         }
-        // TODO: avoid duplicating open chains
-        // TODO: don't miss closed chains
         if (pi.length===8) break linking_loop;
       }
     }
-
   }
 
-  svg.append('g').style('fill','none')
-    .selectAll('path').data(chains).join('path')
+  svg.append('g').selectAll('path').data(chains).join('path')
     .attrs(p0 => {
+      const c = scn(p0[2]);
+      let fill = 'none';
       let path = `M${p0[4]} ${p0[5]}`;
       let prev = p0, p = p0[6];
       for (;;) {
+        if (p===p0) {
+          path += 'z';
+          fill = c;
+          break;
+        }
         path += `L${p[4]} ${p[5]}`;
-        if (p.length==7) break;
+        if (p.length < 8) break;
         const i = p[6]==prev ? 7 : 6;
         p = (prev = p)[i];
       }
-      return { d: path, stroke: scn(p[2]) };
+      return { d: path, stroke: c, fill };
     });
 });
