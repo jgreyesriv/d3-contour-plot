@@ -1,6 +1,17 @@
 document.addEventListener('DOMContentLoaded', () => {
-  make_contour_plot('#plot',data);
-}
+  fetch('https://api.github.com/repos/ivankp/d3-contour-plot/contents/data', {
+    method: 'GET',
+    headers: { 'Accept': 'application/vnd.github.v3+json' }
+  }).then(r => r.ok ? r.json() : Promise.reject(r)
+  ).then(r => {
+    console.log(r);
+    // const data_files = r.map(x => x.path);
+    // console.log(data_files);
+  }).catch(err => {
+    alert(err.statusText);
+  });
+  // make_contour_plot('#plot',data);
+});
 
 function make_contour_plot(div,data) {
   if (!Array.isArray(data)) {
@@ -296,4 +307,4 @@ function make_contour_plot(div,data) {
       d: delaunay.renderHull(),
       fill: scn(0)
     });
-});
+}
