@@ -1,4 +1,8 @@
 document.addEventListener('DOMContentLoaded', () => {
+  make_contour_plot('#plot',data);
+}
+
+function make_contour_plot(div,data) {
   if (!Array.isArray(data)) {
     alert('data must be an array');
     return;
@@ -34,7 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const scn = d3.scaleSequential(d3.interpolateTurbo)
     .domain([-1,ncont-1]);
 
-  const svg = d3.select('#main').append('svg')
+  const svg = d3.select(div).append('svg')
     .attrs({ viewBox: [0,0,width,height], width: width, height: height });
 
   const ax = d3.axisBottom(sx);
@@ -60,7 +64,8 @@ document.addEventListener('DOMContentLoaded', () => {
       color_scale_edges[ncont] = b;
     }
 
-    svg.append('g').selectAll("rect").data(d3.range(ncont)).join("rect")
+    svg.append('g').style('stroke','none')
+      .selectAll("rect").data(d3.range(ncont)).join("rect")
       .attrs({ x: width-margin.right-margin.z, width: margin.z })
       .attrs(i => ({
         y: color_scale_edges[i],
@@ -263,13 +268,9 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Draw contours ==================================================
-  svg.append('g').styles({ stroke: 'none' })
-    .append('path').attrs({
-      d: delaunay.renderHull(),
-      fill: scn(0)
-    });
+  const g = svg.append('g').style('stroke','none');
 
-  svg.append('g').selectAll('path').data(
+  g.selectAll('path').data(
     closed_chains
   ).join('path')
     .attrs(p0 => {
@@ -288,6 +289,11 @@ document.addEventListener('DOMContentLoaded', () => {
         const i = p[6]==prev ? 7 : 6;
         p = (prev = p)[i];
       }
-      return { d: path, stroke: c, fill };
+      return { d: path, fill };
+    });
+
+  g.append('path').lower().attrs({
+      d: delaunay.renderHull(),
+      fill: scn(0)
     });
 });
