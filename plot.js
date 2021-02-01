@@ -12,7 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
         width  = 500 + margin.left + margin.right + margin.z,
         height = 500 + margin.bottom + margin.top;
 
-  const ncont = 4;
+  const ncont = 14;
 
   const sx = d3.scaleLinear()
     .domain(d3.extent(data, d => d[0])).nice()
@@ -72,6 +72,7 @@ document.addEventListener('DOMContentLoaded', () => {
   const delaunay = d3.Delaunay.from(data, d => sx(d[0]), d => sy(d[1]));
   const {points, halfedges, triangles, hull} = delaunay;
 
+  // draw triangulation
   svg.append('path').attrs({
     d: delaunay.render(),
     fill: 'none',
@@ -112,11 +113,12 @@ document.addEventListener('DOMContentLoaded', () => {
   }
   cont_pts.sort(([a1,a2,a3],[b1,b2,b3]) => a1-b1 || a2-b2 || a3-b3);
 
-  svg.append('g').selectAll('circle').data(cont_pts).join('circle')
-    .attrs(p => ({
-      cx: p[4], cy: p[5], r: 2,
-      fill: scn(p[2])
-    }));
+  // // draw interpolation points
+  // svg.append('g').selectAll('circle').data(cont_pts).join('circle')
+  //   .attrs(p => ({
+  //     cx: p[4], cy: p[5], r: 2,
+  //     fill: scn(p[2])
+  //   }));
 
   // Connect points on contours =====================================
   const open_chains = [ ];
@@ -198,15 +200,6 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   { // Fill contours ================================================
-    // const sorted_hull = Array(hull.length);
-    // for (let i=hull.length;;) {
-    //   const j = ((--i)||hull.length)-1;
-    //   const x = sorted_hull[i] = [ hull[i], hull[j], j ];
-    //   if (x[0] > x[1]) [x[0],x[1]] = [x[1],x[0]];
-    //   if (!i) break;
-    // }
-    // sorted_hull.sort(([a1,a2],[b1,b2]) => a1-b1 || a2-b2);
-
     const open_ends = Array(open_chains.length*2);
     for (let i=open_chains.length; i;) {
       const p0 = open_chains[--i];
@@ -221,7 +214,6 @@ document.addEventListener('DOMContentLoaded', () => {
       for (let j=2; j; ) {
         const pj = p[--j];
         const h = hull.findIndex( // TODO: binary search
-          // h => h[0]===pj[0] && h[1]===pj[1]
           (h,i,hs) => {
             let h2 = hs[(i+1)%hs.length];
             if (h > h2) [h,h2] = [h2,h];
@@ -235,13 +227,6 @@ document.addEventListener('DOMContentLoaded', () => {
       }
     }
     open_ends.sort(([a1,a2],[b1,b2]) => a1-b1 || a2-b2);
-
-    // const open_ends_c = open_ends.map((p,i) => [ p[3][2], i ])
-    //   .sort(([a1,a2],[b1,b2]) => a1-b1 || a2-b2);
-
-    svg.append('g').selectAll('text').data(open_ends).join('text')
-      .attrs(p => ({ x: p[3][4], y: p[3][5] }))
-      .text((p,i) => i);
 
     for (let i=0, n=open_ends.length, nh=hull.length; i<n; ++i) {
       const p1 = open_ends[i];
@@ -275,41 +260,10 @@ document.addEventListener('DOMContentLoaded', () => {
       open_ends[i] = null;
       open_ends[j] = null;
     }
-
-    // let num = 0;
-    // for (let i=0, j, n=open_ends.length, m=n/2; m; i=(i+n-1)%n) {
-    //   while (!open_ends[i]) i = (i+1)%n;
-    //   j = i;
-    //   for (;;) {
-    //     while (!open_ends[j = (j+1)%n]) ;
-    //     if (open_ends[i][2] === open_ends[j][2]) break;
-    //     i = j;
-    //   }
-    //   --m;
-    //   const ei = open_ends[i][3];
-    //   const ej = open_ends[j][3];
-    //   ei.push(ej); // TODO: add hull segments
-    //   ej.push(ei);
-    //   open_chains[open_ends[i][2]] = null;
-    //   closed_chains.push(ei);
-    //   open_ends[i] = null;
-    //   console.log(ei[2]);
-    //
-    //   svg.append('g').selectAll('text').data([ei]).join('text')
-    //     .attrs(p => ({ x: p[4], y: p[5] }))
-    //     .text(++num);
-    // }
   }
-
-  svg.append('g').selectAll('circle').data(hull.slice(0,2)).join('circle')
-    .attrs((p,i) => ({
-      cx: points[p*2], cy: points[p*2+1], r: 3-i,
-      fill: 'gray', stroke: 'black'
-    }));
 
   // Draw contours ==================================================
   svg.append('g').selectAll('path').data(
-    // open_chains.concat(closed_chains)
     closed_chains
   ).join('path')
     .attrs(p0 => {
