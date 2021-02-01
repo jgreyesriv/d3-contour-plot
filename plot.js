@@ -12,7 +12,7 @@ document.addEventListener('DOMContentLoaded', () => {
         width  = 500 + margin.left + margin.right + margin.z,
         height = 500 + margin.bottom + margin.top;
 
-  const ncont = 14;
+  const ncont = 28;
 
   const sx = d3.scaleLinear()
     .domain(d3.extent(data, d => d[0])).nice()
@@ -29,10 +29,10 @@ document.addEventListener('DOMContentLoaded', () => {
     .domain(d3.extent(data, d => d[2])).nice()
     .range(ry);
   // https://github.com/d3/d3-scale-chromatic
-  const sc = d3.scaleSequential(d3.interpolateTurbo) // Viridis, RdYlGn
+  const sc = d3.scaleSequential(d3.interpolateTurbo) // Viridis, Turbo, RdYlGn
     .domain(sz.domain());
   const scn = d3.scaleSequential(d3.interpolateTurbo)
-    .domain([0,ncont-1]);
+    .domain([-1,ncont-1]);
 
   const svg = d3.select('#main').append('svg')
     .attrs({ viewBox: [0,0,width,height], width: width, height: height });
@@ -72,12 +72,12 @@ document.addEventListener('DOMContentLoaded', () => {
   const delaunay = d3.Delaunay.from(data, d => sx(d[0]), d => sy(d[1]));
   const {points, halfedges, triangles, hull} = delaunay;
 
-  // draw triangulation
-  svg.append('path').attrs({
-    d: delaunay.render(),
-    fill: 'none',
-    stroke: '#000'
-  });
+  // // draw triangulation
+  // svg.append('path').attrs({
+  //   d: delaunay.render(),
+  //   fill: 'none',
+  //   stroke: '#000'
+  // });
 
   const [z0,z3] = sz.domain();
   const dz = (z3-z0)/ncont;
@@ -263,6 +263,12 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Draw contours ==================================================
+  svg.append('g').styles({ stroke: 'none' })
+    .append('path').attrs({
+      d: delaunay.renderHull(),
+      fill: scn(0)
+    });
+
   svg.append('g').selectAll('path').data(
     closed_chains
   ).join('path')
