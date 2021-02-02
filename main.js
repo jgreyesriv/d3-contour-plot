@@ -38,6 +38,7 @@ document.addEventListener('DOMContentLoaded', () => {
   { const m = window.location.href.match(
       /^https?:\/\/([^.]+)\.github\.io\/([^\/]+)/);
     if (m) repo = m[1]+'/'+m[2];
+    _id('github').href = 'https://github.com/'+repo;
   }
   (async () => {
     let current_path = [ ];
