@@ -69,7 +69,7 @@ document.addEventListener('DOMContentLoaded', () => {
       }
       const span = make(node,'li','span');
       span.classList.add('file');
-      span.textContent = name;
+      span.textContent = name.replace(/\.json$/,'');
       span.onclick = async function() {
         const r = await fetch(
           'https://raw.githubusercontent.com/'+repo+'/'+branch
