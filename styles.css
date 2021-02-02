@@ -29,6 +29,11 @@ ul.file-tree .file:hover {
 }
 
 #plot {
-  margin-top: 15px;
+  margin: 15px 0 0 0;
+  display: inline-block;
+}
+#plot > figcaption {
+  text-align: center;
+  font-family: sans-serif;
 }
 

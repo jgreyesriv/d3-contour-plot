@@ -1,4 +1,4 @@
-let repo; // = 'ivankp/d3-contour-plot';
+let repo = 'ivankp/d3-contour-plot';
 
 async function github_api(req) {
   let r = await fetch(
@@ -82,7 +82,7 @@ document.addEventListener('DOMContentLoaded', () => {
   })();
 });
 
-function make_contour_plot(div,{data,title,vars}) {
+function make_contour_plot(fig,{data,title,vars}) {
   if (!Array.isArray(data)) {
     alert('data must be an array');
     return;
@@ -91,6 +91,8 @@ function make_contour_plot(div,{data,title,vars}) {
     alert('data array must contain at least 3 points');
     return;
   }
+
+  make(fig,'figcaption').textContent = title;
 
   const margin = { top: 10, right: 50, bottom: 20, left: 30, z: 25 },
         width  = 500 + margin.left + margin.right + margin.z,
@@ -118,7 +120,7 @@ function make_contour_plot(div,{data,title,vars}) {
   const scn = d3.scaleSequential(d3.interpolateTurbo)
     .domain([-1,ncont-1]);
 
-  const svg = d3.select(div).append('svg')
+  const svg = d3.select(fig).append('svg')
     .attrs({ viewBox: [0,0,width,height], width: width, height: height });
 
   const ax = d3.axisBottom(sx);
@@ -348,7 +350,7 @@ function make_contour_plot(div,{data,title,vars}) {
   }
 
   // Draw contours ==================================================
-  const g = svg.append('g').style('stroke','none');
+  let g = svg.append('g').style('stroke','none');
 
   g.selectAll('path').data(
     closed_chains
@@ -376,4 +378,17 @@ function make_contour_plot(div,{data,title,vars}) {
       d: delaunay.renderHull(),
       fill: scn(0)
     });
+
+  g = svg.append('g').styles({
+    'font-family': 'sans-serif',
+    'font-size': 12,
+    'font-weight': 'bold'
+  });
+  g.append('text').attrs({
+    x: width-margin.right-margin.z, y: height-margin.bottom-5,
+    'text-anchor': 'end'
+  }).text(vars[0]);
+  g.append('text').attrs({
+    x: margin.left+5, y: margin.top+10, 'text-anchor': 'start'
+  }).text(vars[1]);
 }
