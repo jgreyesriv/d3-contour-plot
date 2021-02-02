@@ -1,0 +1,23 @@
+ul.file-tree {
+  list-style-type: none;
+  margin: 0;
+  padding: 0;
+}
+ul.file-tree li > span:first-child {
+  cursor: pointer;
+  user-select: none;
+}
+ul.file-tree li > span:first-child::before {
+  content: "\25B8";
+  display: inline-block;
+  margin-right: 6px;
+}
+ul.file-tree li.exp > span:first-child::before {
+  transform: rotate(90deg);
+}
+ul.file-tree, ul.file-tree ul {
+  display: block;
+}
+ul.file-tree li:not(.exp) ul {
+  display: none;
+}

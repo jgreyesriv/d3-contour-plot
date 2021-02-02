@@ -1,15 +1,65 @@
+const repo = 'ivankp/d3-contour-plot';
+
+async function github_api(req) {
+  let r = await fetch(
+    'https://api.github.com/repos/'+repo+(req&&req[0]!=='/'?'/':'')+req,
+    { method: 'GET',
+      headers: { 'Accept': 'application/vnd.github.v3+json' }
+    });
+  if (!r.ok) throw new Error(
+    `Error requesting "${req}": ${r.status}: ${r.statusText}`);
+  r = await r.json();
+  if ('message' in r) throw new Error(
+    `Error requesting "${req}": ${r.message}`);
+  return r;
+}
+
+async function get_data_files() {
+  const info = await github_api('');
+  const { default_branch } = info;
+  const { tree, truncated } = await github_api(
+    'git/trees/'+default_branch+':data?recursive=1');
+  if (truncated) throw new Error('Tree was truncated');
+  return tree;
+}
+
+function make(p,...tags) {
+  for (const t of tags)
+    p = p.appendChild(document.createElement(t))
+  return p;
+}
+const _id = id => document.getElementById(id);
+
 document.addEventListener('DOMContentLoaded', () => {
-  fetch('https://api.github.com/repos/ivankp/d3-contour-plot/contents/data', {
-    method: 'GET',
-    headers: { 'Accept': 'application/vnd.github.v3+json' }
-  }).then(r => r.ok ? r.json() : Promise.reject(r)
-  ).then(r => {
-    console.log(r);
-    // const data_files = r.map(x => x.path);
-    // console.log(data_files);
-  }).catch(err => {
-    alert(err.statusText);
-  });
+  (async () => {
+    let current_path = [ ];
+    let node = make(_id('menu'),'ul');
+    node.className = 'file-tree';
+    for (const f of await get_data_files()) {
+      if (f.type!=='tree') continue;
+      const path = f.path.split('/');
+      const name = path.pop();
+      let n = 0;
+      while (n < path.length && current_path[n]===path[n]) ++n;
+      while (current_path.length > n) {
+        current_path.pop();
+        node = node.parentNode.parentNode;
+      }
+      current_path = path;
+      while (n < path.length) {
+        const li = make(node,'li');
+        const span = make(li,'span');
+        span.textContent = path[n];
+        node = make(li,'ul');
+        ++n;
+        span.onclick = function() {
+          this.parentNode.classList.toggle("exp");
+        };
+      }
+      const li = make(node,'li');
+      li.textContent = name;
+    }
+  })();
   // make_contour_plot('#plot',data);
 });
 
