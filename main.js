@@ -1,4 +1,4 @@
-const repo = 'ivankp/d3-contour-plot';
+let repo; // = 'ivankp/d3-contour-plot';
 
 async function github_api(req) {
   let r = await fetch(
@@ -7,10 +7,10 @@ async function github_api(req) {
       headers: { 'Accept': 'application/vnd.github.v3+json' }
     });
   if (!r.ok) throw new Error(
-    `Error requesting "${req}": ${r.status}: ${r.statusText}`);
+    `Error fetching "${req}": ${r.status}: ${r.statusText}`);
   r = await r.json();
   if ('message' in r) throw new Error(
-    `Error requesting "${req}": ${r.message}`);
+    `Error fetching "${req}": ${r.message}`);
   return r;
 }
 
@@ -20,22 +20,32 @@ async function get_data_files() {
   const { tree, truncated } = await github_api(
     'git/trees/'+default_branch+':data?recursive=1');
   if (truncated) throw new Error('Tree was truncated');
-  return tree;
+  return { tree, branch: default_branch };
 }
 
+const _id = id => document.getElementById(id);
 function make(p,...tags) {
   for (const t of tags)
     p = p.appendChild(document.createElement(t))
   return p;
 }
-const _id = id => document.getElementById(id);
+function clear(x) {
+  for (let c; c = x.firstChild; ) x.removeChild(c);
+  return x;
+}
 
 document.addEventListener('DOMContentLoaded', () => {
+  { const m_repo = window.location.href.match(
+      /^https?:\/\/([^.]+)\.github\.io\/([^\/]+)/);
+    if (m_repo)
+      repo = m[1]+'/'+m[2];
+  }
   (async () => {
     let current_path = [ ];
     let node = make(_id('menu'),'ul');
     node.className = 'file-tree';
-    for (const f of await get_data_files()) {
+    const { tree, branch } = await get_data_files();
+    for (const f of tree) {
       if (f.type!=='blob') continue;
       const path = f.path.split('/');
       const name = path.pop();
@@ -49,6 +59,7 @@ document.addEventListener('DOMContentLoaded', () => {
       while (n < path.length) {
         const li = make(node,'li');
         const span = make(li,'span');
+        span.classList.add('dir');
         span.textContent = path[n];
         node = make(li,'ul');
         ++n;
@@ -56,14 +67,23 @@ document.addEventListener('DOMContentLoaded', () => {
           this.parentNode.classList.toggle("exp");
         };
       }
-      const li = make(node,'li');
-      li.textContent = name;
+      const span = make(node,'li','span');
+      span.classList.add('file');
+      span.textContent = name;
+      span.onclick = async function() {
+        const r = await fetch(
+          'https://raw.githubusercontent.com/'+repo+'/'+branch
+          +'/data/'+encodeURIComponent(f.path),
+          { method: 'GET' });
+        if (!r.ok) throw new Error(
+          `Error fetching "${req}": ${r.status}: ${r.statusText}`);
+        make_contour_plot(clear(_id('plot')), await r.json());
+      };
     }
   })();
-  // make_contour_plot('#plot',data);
 });
 
-function make_contour_plot(div,data) {
+function make_contour_plot(div,{data,title,vars}) {
   if (!Array.isArray(data)) {
     alert('data must be an array');
     return;

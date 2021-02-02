@@ -9,18 +9,26 @@ ul.file-tree ul {
 ul.file-tree li {
   list-style-type: none;
 }
-ul.file-tree li > span:first-child {
+ul.file-tree span {
   cursor: pointer;
   user-select: none;
 }
-ul.file-tree li > span:first-child::before {
+ul.file-tree li > .dir::before {
   content: "\25B8";
   display: inline-block;
   margin-right: 6px;
 }
-ul.file-tree li.exp > span:first-child::before {
+ul.file-tree li.exp > .dir::before {
   transform: rotate(90deg);
 }
 ul.file-tree li:not(.exp) ul {
   display: none;
 }
+ul.file-tree .file:hover {
+  text-decoration: underline;
+}
+
+#plot {
+  margin-top: 15px;
+}
+
