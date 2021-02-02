@@ -35,10 +35,9 @@ function clear(x) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  { const m_repo = window.location.href.match(
+  { const m = window.location.href.match(
       /^https?:\/\/([^.]+)\.github\.io\/([^\/]+)/);
-    if (m_repo)
-      repo = m[1]+'/'+m[2];
+    if (m) repo = m[1]+'/'+m[2];
   }
   (async () => {
     let current_path = [ ];
