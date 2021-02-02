@@ -36,7 +36,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let node = make(_id('menu'),'ul');
     node.className = 'file-tree';
     for (const f of await get_data_files()) {
-      if (f.type!=='tree') continue;
+      if (f.type!=='blob') continue;
       const path = f.path.split('/');
       const name = path.pop();
       let n = 0;
