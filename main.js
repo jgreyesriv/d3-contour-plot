@@ -34,6 +34,8 @@ function clear(x) {
   return x;
 }
 
+const round = x => x.toFixed(4).replace(/\.?0*$/,'');
+
 document.addEventListener('DOMContentLoaded', () => {
   { const m = window.location.href.match(
       /^https?:\/\/([^.]+)\.github\.io\/([^\/]+)/);
@@ -121,22 +123,26 @@ function make_contour_plot(fig,{data,title,vars}) {
   const scn = d3.scaleSequential(d3.interpolateTurbo)
     .domain([-1,ncont-1]);
 
-  const svg = d3.select(fig).append('svg')
-    .attrs({ viewBox: [0,0,width,height], width: width, height: height });
-
   const ax = d3.axisBottom(sx);
   const ay = d3.axisLeft(sy);
   const az = d3.axisRight(sz);
 
-  svg.append('g').attrs({
+  const svg = d3.select(fig).append('svg')
+    .attrs({ viewBox: [0,0,width,height], width: width, height: height });
+
+  const g_axes = svg.append('g')
+  g_axes.append('g').attrs({
     transform: `translate(0,${height-margin.bottom})`
   }).call(ax);
-  svg.append('g').attrs({
+  g_axes.append('g').attrs({
     transform: `translate(${margin.left},0)`
   }).call(ay);
-  svg.append('g').attrs({
+  g_axes.append('g').attrs({
     transform: `translate(${width-margin.right},0)`
   }).call(az);
+  g_axes.selectAll('line,path').attr('stroke','#000');
+  g_axes.selectAll('text').attr('fill','#000');
+  g_axes.selectAll('*').attr('class',null);
 
   { // Draw color scale =============================================
     const color_scale_edges = Array(ncont+1);
@@ -359,7 +365,7 @@ function make_contour_plot(fig,{data,title,vars}) {
     .attrs(p0 => {
       const c = scn(p0[2]);
       let fill = 'none';
-      let path = `M${p0[4]} ${p0[5]}`;
+      let path = `M${round(p0[4])} ${round(p0[5])}`;
       let prev = p0, p = p0[6];
       for (;;) {
         if (p===p0) {
@@ -367,7 +373,7 @@ function make_contour_plot(fig,{data,title,vars}) {
           fill = c;
           break;
         }
-        path += `L${p[4]} ${p[5]}`;
+        path += `L${round(p[4])} ${round(p[5])}`;
         if (p.length < 8) break;
         const i = p[6]==prev ? 7 : 6;
         p = (prev = p)[i];
@@ -375,12 +381,18 @@ function make_contour_plot(fig,{data,title,vars}) {
       return { d: path, fill };
     });
 
-  g.append('path').lower().attrs({
-      d: delaunay.renderHull(),
-      fill: scn(0)
-    });
+  { let hull_d;
+    let h = hull[0]*2;
+    hull_d = `M${round(points[h])} ${round(points[h+1])}`;
+    for (let i=hull.length; i; ) {
+      h = hull[--i]*2;
+      hull_d += `L${round(points[h])} ${round(points[h+1])}`;
+    }
+    hull_d += 'z';
+    g.append('path').lower().attrs({ d: hull_d, fill: scn(0) });
+  }
 
-  g = svg.append('g').styles({
+  g = svg.append('g').attrs({
     'font-family': 'sans-serif',
     'font-size': 12,
     'font-weight': 'bold'
@@ -393,3 +405,41 @@ function make_contour_plot(fig,{data,title,vars}) {
     x: margin.left+5, y: margin.top+10, 'text-anchor': 'start'
   }).text(vars[1]);
 }
+
+const dummy_a = document.createElement('a');
+
+function save_svg(svg) {
+  dummy_a.href = URL.createObjectURL(new Blob(
+    [ '<?xml version="1.0" encoding="UTF-8"?>\n',
+      svg.outerHTML
+      // add xml namespace
+      .replace(/^<svg\s*([^>]*)>/,'<svg xmlns="'+svg.namespaceURI+'" $1>')
+      // self-closing tags
+      .replace(/<([^ <>\t]+)([^>]*)>\s*<\/\1>/g,'<$1$2/>')
+      // terse style
+      .replace(/(style=")([^"]+)/g, (m,_1,_2) =>
+        _1 + _2.replace(/\s*:\s*/g,':')
+      )
+      // hex colors
+      .replace(/(?<=[:"])rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/g,
+        (m,_1,_2,_3) => [_1,_2,_3].reduce( (a,x) =>
+          a+Math.round(parseFloat(x)).toString(16).padStart(2,'0'), '#')
+      )
+    ],
+    { type:"image/svg+xml;charset=utf-8" }
+  ));
+  dummy_a.download = 'plot.svg';
+  dummy_a.click();
+}
+
+window.addEventListener('keydown', function(e) { // Ctrl + s
+  if ( e.ctrlKey && !(e.shiftKey || e.altKey || e.metaKey)
+    && ((e.which || e.keyCode) === 83)
+  ) {
+    const svg = _id('plot').querySelector('svg');
+    if (svg) {
+      e.preventDefault();
+      save_svg(svg);
+    }
+  }
+});
