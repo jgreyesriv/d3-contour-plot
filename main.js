@@ -101,7 +101,7 @@ function make_contour_plot(fig,{data,title,vars}) {
         width  = 500 + margin.left + margin.right + margin.z,
         height = 500 + margin.bottom + margin.top;
 
-  const ncont = 7;
+  const ncont = 28;
 
   const sx = d3.scaleLinear()
     .domain(d3.extent(data, d => d[0])).nice()
@@ -393,11 +393,11 @@ function make_contour_plot(fig,{data,title,vars}) {
 
   // ================================================================
   // draw triangulation
-  svg.append('path').attrs({
-    d: delaunay.render(),
-    fill: 'none',
-    stroke: '#000'
-  });
+  // svg.append('path').attrs({
+  //   d: delaunay.render(),
+  //   fill: 'none',
+  //   stroke: '#000'
+  // });
 
   // // draw interpolation points
   // svg.append('g').selectAll('circle').data(cont_pts).join('circle')
@@ -406,11 +406,11 @@ function make_contour_plot(fig,{data,title,vars}) {
   //     fill: scn(p[2])
   //   }));
 
-  svg.append('g').selectAll('circle').data(hull.slice(0,2)).join('circle')
-    .attrs((h,i) => ({
-      cx: points[h*2], cy: points[h*2+1], r: 3-i,
-      fill: 'gray', stroke: 'black'
-    }));
+  // svg.append('g').selectAll('circle').data(hull.slice(0,2)).join('circle')
+  //   .attrs((h,i) => ({
+  //     cx: points[h*2], cy: points[h*2+1], r: 3-i,
+  //     fill: 'gray', stroke: 'black'
+  //   }));
 }
 
 const dummy_a = document.createElement('a');
