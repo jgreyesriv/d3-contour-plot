@@ -48,7 +48,7 @@ document.addEventListener('DOMContentLoaded', () => {
     node.className = 'file-tree';
     const { tree, branch } = await get_data_files();
     for (const f of tree) {
-      if (f.type!=='blob') continue;
+      if (f.type!=='blob' || !f.path.endsWith('.json')) continue;
       const path = f.path.split('/');
       const name = path.pop();
       let n = 0;
@@ -166,13 +166,6 @@ function make_contour_plot(fig,{data,title,vars}) {
   const delaunay = d3.Delaunay.from(data, d => sx(d[0]), d => sy(d[1]));
   const {points, halfedges, triangles, hull} = delaunay;
 
-  // // draw triangulation
-  // svg.append('path').attrs({
-  //   d: delaunay.render(),
-  //   fill: 'none',
-  //   stroke: '#000'
-  // });
-
   const [z0,z3] = sz.domain();
   const dz = (z3-z0)/ncont;
 
@@ -206,13 +199,6 @@ function make_contour_plot(fig,{data,title,vars}) {
     }
   }
   cont_pts.sort(([a1,a2,a3],[b1,b2,b3]) => a1-b1 || a2-b2 || a3-b3);
-
-  // // draw interpolation points
-  // svg.append('g').selectAll('circle').data(cont_pts).join('circle')
-  //   .attrs(p => ({
-  //     cx: p[4], cy: p[5], r: 2,
-  //     fill: scn(p[2])
-  //   }));
 
   // Connect points on contours =====================================
   const open_chains = [ ];
@@ -343,8 +329,8 @@ function make_contour_plot(fig,{data,title,vars}) {
           p2 = open_ends[j=(j||n)-1];
         } while (!p2 || p1[2]!==p2[2]);
         e2 = p2[3];
-        for (let h=p2[0], h1=p1[0]; h!==h1; h=(h+1)%nh) {
-          const k = hull[h]*2;
+        for (let h=p2[0], h1=p1[0]; h!==h1; ) {
+          const k = hull[h=(h+1)%nh]*2;
           e2.push((e2 = [,,,, points[k], points[k+1], e2 ]));
         }
       }
@@ -404,6 +390,27 @@ function make_contour_plot(fig,{data,title,vars}) {
   g.append('text').attrs({
     x: margin.left+5, y: margin.top+10, 'text-anchor': 'start'
   }).text(vars[1]);
+
+  // ================================================================
+  // draw triangulation
+  // svg.append('path').attrs({
+  //   d: delaunay.render(),
+  //   fill: 'none',
+  //   stroke: '#000'
+  // });
+
+  // // draw interpolation points
+  // svg.append('g').selectAll('circle').data(cont_pts).join('circle')
+  //   .attrs(p => ({
+  //     cx: p[4], cy: p[5], r: 2,
+  //     fill: scn(p[2])
+  //   }));
+
+  // svg.append('g').selectAll('circle').data(hull.slice(0,2)).join('circle')
+  //   .attrs((h,i) => ({
+  //     cx: points[h*2], cy: points[h*2+1], r: 3-i,
+  //     fill: 'gray', stroke: 'black'
+  //   }));
 }
 
 const dummy_a = document.createElement('a');

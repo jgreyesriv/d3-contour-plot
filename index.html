@@ -5,34 +5,39 @@
 <title>Contour plots</title>
 <link rel="icon" type="image/svg+xml" href="icons/helmet.svg">
 <style>
+ul.file-tree {
+  font-family: monospace;
+}
 ul.file-tree, ul.file-tree ul {
   display: block;
   margin: 0;
   padding: 0;
 }
 ul.file-tree ul {
-  padding-left: 1em;
+  padding-left: 1.2em;
 }
 ul.file-tree li {
   list-style-type: none;
 }
 ul.file-tree span {
   cursor: pointer;
-  user-select: none;
+}
+ul.file-tree span:hover {
+  text-decoration: underline;
 }
 ul.file-tree li > .dir::before {
-  content: "\25B8";
+  content: "\25B6";
   display: inline-block;
-  margin-right: 6px;
+  width: 1.2em;
+  text-align: center;
+  transition: transform 0.07s linear;
 }
 ul.file-tree li.exp > .dir::before {
   transform: rotate(90deg);
+  transition: transform 0.07s linear;
 }
 ul.file-tree li:not(.exp) ul {
   display: none;
-}
-ul.file-tree .file:hover {
-  text-decoration: underline;
 }
 
 #plot {
