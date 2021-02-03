@@ -413,17 +413,19 @@ function save_svg(svg) {
     [ '<?xml version="1.0" encoding="UTF-8"?>\n',
       svg.outerHTML
       // add xml namespace
-      .replace(/^<svg\s*([^>]*)>/,'<svg xmlns="'+svg.namespaceURI+'" $1>')
+      .replace(/^<svg\s*(?=[^>]*>)/,'<svg xmlns="'+svg.namespaceURI+'" ')
       // self-closing tags
       .replace(/<([^ <>\t]+)([^>]*)>\s*<\/\1>/g,'<$1$2/>')
       // terse style
-      .replace(/(style=")([^"]+)/g, (m,_1,_2) =>
-        _1 + _2.replace(/\s*:\s*/g,':')
-      )
+      .replace(/(?<=style=")([^"]+)/g, (m,_1) => _1.replace(/\s*:\s*/g,':'))
       // hex colors
       .replace(/(?<=[:"])rgb\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)\s*\)/g,
         (m,_1,_2,_3) => [_1,_2,_3].reduce( (a,x) =>
           a+Math.round(parseFloat(x)).toString(16).padStart(2,'0'), '#')
+      )
+      // round translations
+      .replace(/(?<=translate)\(([0-9.]+),([0-9.]+)\)/g,
+        (m,_1,_2) => `(${round(parseFloat(_1))},${round(parseFloat(_2))})`
       )
     ],
     { type:"image/svg+xml;charset=utf-8" }
