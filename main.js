@@ -1,4 +1,4 @@
-let repo = 'ivankp/d3-contour-plot';
+let repo = 'jgreyesriv/d3-contour-plot';
 
 async function github_api(req) {
   let r = await fetch(
@@ -342,13 +342,32 @@ function make_contour_plot(fig,{data,title,vars}) {
     }
   }
 
+  // Sort contours by area ==========================================
+  const c_indices = new Uint32Array(closed_chains.length);
+  { const c_areas = new Float32Array(closed_chains.length);
+    for (let i=closed_chains.length; i; ) { --i;
+      let area = 0;
+      const p0 = closed_chains[i];
+      let p1 = p0, p = p0[6];
+      for (;;) {
+        area += p1[4]*p[5] - p1[5]*p[4];
+        if (p===p0) break;
+        const j = p[6]==p1 ? 7 : 6;
+        p = (p1 = p)[j];
+      }
+      c_areas[c_indices[i] = i] = Math.abs(area);
+    }
+    c_indices.sort((a,b) => c_areas[b] - c_areas[a]);
+  }
+
   // Draw contours ==================================================
   let g = svg.append('g').style('stroke','none');
 
   g.selectAll('path').data(
-    closed_chains
+    c_indices
   ).join('path')
-    .attrs(p0 => {
+    .attrs(i => {
+      const p0 = closed_chains[i];
       const c = scn(p0[2]);
       let fill = 'none';
       let path = `M${round(p0[4])} ${round(p0[5])}`;
@@ -360,9 +379,9 @@ function make_contour_plot(fig,{data,title,vars}) {
           break;
         }
         path += `L${round(p[4])} ${round(p[5])}`;
-        if (p.length < 8) break;
-        const i = p[6]==prev ? 7 : 6;
-        p = (prev = p)[i];
+        // if (p.length < 8) break; // for open contours
+        const j = p[6]==prev ? 7 : 6;
+        p = (prev = p)[j];
       }
       return { d: path, fill };
     });
