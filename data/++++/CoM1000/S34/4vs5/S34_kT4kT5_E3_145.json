@@ -1,8 +1,8 @@
 {
-	"title":"kT4 vs kT5 (S34->4MT^2) w\/ E3 145",
+	"title":"kT4 vs kT5 (S34-->4MT^2) w\/ E3=145",
 	"vars":[
-		"k4",
-		"k5"
+		"kT4",
+		"kT5"
 	],
 	"data":[
 		[
