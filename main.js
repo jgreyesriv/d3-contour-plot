@@ -111,7 +111,12 @@ function make_contour_plot(fig,{data,title,vars}) {
     return;
   }
 
-  make(fig,'figcaption').textContent = title;
+  { const cap = make(fig,'figcaption');
+    title.split(/\^(\d+)/).forEach((x,i) => {
+      if (i%2) make(cap,'sup').textContent = x;
+      else cap.appendChild(document.createTextNode(x));
+    });
+  }
 
   const margin = { top: 10, right: 50, bottom: 20, left: 30, z: 25 },
         width  = 500 + margin.left + margin.right + margin.z,
