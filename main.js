@@ -22,13 +22,15 @@ async function get_data_files() {
   return tree;
 }
 
+let plot_data;
 async function load_plot(path) {
   const r = await fetch(
     'https://raw.githubusercontent.com/'+repo+'/'+branch+'/data/'+path+'.json',
     { method: 'GET' });
   if (!r.ok) throw new Error(
     `Error fetching "${req}": ${r.status}: ${r.statusText}`);
-  make_contour_plot(clear(_id('plot')), await r.json());
+  plot_data = await r.json();
+  make_contour_plot();
 }
 
 const _id = id => document.getElementById(id);
@@ -45,7 +47,7 @@ function clear(x) {
 const round = x => x.toFixed(4).replace(/\.?0*$/,'');
 
 document.addEventListener('DOMContentLoaded', () => {
-  const search = window.location.search;
+  const search = window.location.search.match(/(?<=\?)[^&]*/);
   const href = window.location.href.replace(/\?.*/,'');
   { const m = href.match(/^https?:\/\/([^\/]+)\.github\.io(\/[^\/]+)/);
     if (m) repo = m[1]+m[2];
@@ -90,18 +92,28 @@ document.addEventListener('DOMContentLoaded', () => {
       };
     }
 
-    if (search.length>1)
-      load_plot(search.slice(1)).catch(e => {
+    if (search) {
+      const path = search[0];
+      load_plot(path).then(() => {
+        window.history.replaceState({ path }, '', href+'?'+path);
+      }).catch(e => {
         console.error(e);
         window.history.replaceState({ }, '', href);
       });
+    }
   })();
+
+  _id('ofill').onchange = function(e) {
+    make_contour_plot({ ofill: this.checked});
+  };
 });
 window.onpopstate = function(e) {
   load_plot(e.state.path);
 };
 
-function make_contour_plot(fig,{data,title,vars}) {
+function make_contour_plot({ofill}={}) {
+  const { data, title, vars } = plot_data;
+
   if (!Array.isArray(data)) {
     alert('data must be an array');
     return;
@@ -111,6 +123,9 @@ function make_contour_plot(fig,{data,title,vars}) {
     return;
   }
 
+  if (ofill===undefined) ofill = _id('ofill').checked;
+
+  const fig = clear(_id('plot'));
   { const cap = make(fig,'figcaption');
     title.split(/\^(\d+)/).forEach((x,i) => {
       if (i%2) make(cap,'sup').textContent = x;
@@ -122,7 +137,7 @@ function make_contour_plot(fig,{data,title,vars}) {
         width  = 500 + margin.left + margin.right + margin.z,
         height = 500 + margin.bottom + margin.top;
 
-  const ncont = 28;
+  const ncont = 4;
 
   const sx = d3.scaleLinear()
     .domain(d3.extent(data, d => d[0])).nice()
@@ -324,15 +339,18 @@ function make_contour_plot(fig,{data,title,vars}) {
     }
   }
 
-  { // Fill contours ================================================
-    const open_ends = Array(open_chains.length*2);
+  if (ofill) { // Complete contours =================================
+    const n  = open_chains.length*2;
+    const nh = hull.length;
+
+    const open_ends = Array(n);
     for (let i=open_chains.length; i;) {
       const p0 = open_chains[--i];
       let prev = p0, p = p0[6];
       for (;;) {
         if (p[3]==null) break;
-        const i = p[6]==prev ? 7 : 6;
-        p = (prev = p)[i];
+        const j = p[6]==prev ? 7 : 6;
+        p = (prev = p)[j];
       }
       p = [ p0, p ];
 
@@ -353,45 +371,99 @@ function make_contour_plot(fig,{data,title,vars}) {
     }
     open_ends.sort(([a1,a2],[b1,b2]) => a1-b1 || a2-b2);
 
-    for (let i=0, n=open_ends.length, nh=hull.length; i<n; ++i) {
-      const p1 = open_ends[i];
-      if (!p1) continue;
-      let j=i, p2;
-      do {
-        p2 = open_ends[j=(j+1)%n];
-      } while (!p2);
-      const e1 = p1[3];
-      let e2 = p2[3];
-      if (e1[2] < e2[2] || p1[2]===p2[2]) { // fill forward
-        while (!p2 || p1[2]!==p2[2])
-          p2 = open_ends[j=(j+1)%n];
-        e2 = p2[3];
-        for (let h=p2[0], h1=p1[0]; h!==h1; h=(h||nh)-1) {
-          const k = hull[h]*2;
-          e2.push((e2 = [,,,, points[k], points[k+1], e2 ]));
-        }
-      } else { // fill backward
-        j = i;
-        do {
-          p2 = open_ends[j=(j||n)-1];
-        } while (!p2 || p1[2]!==p2[2]);
-        e2 = p2[3];
-        for (let h=p2[0], h1=p1[0]; h!==h1; ) {
-          const k = hull[h=(h+1)%nh]*2;
-          e2.push((e2 = [,,,, points[k], points[k+1], e2 ]));
-        }
+    // const c_open_ends = new Uint32Array(n);
+    // for (let i=n; i; ) { --i;
+    //   c_open_ends[i] = i;
+    // }
+    // c_open_ends.sort((a,b) => open_ends[b][3][2] - open_ends[a][3][2]);
+
+    // function next(i) {
+    //   for (;;) {
+    //     const x = open_ends[i=(i+1)%n];
+    //     if (x) return [x,i];
+    //   }
+    // }
+    // function prev(i) {
+    //   for (;;) {
+    //     const x = open_ends[i=(i||n)-1];
+    //     if (x) return [x,i];
+    //   }
+    // }
+
+    for (let i=0, m=n/2; m; i=(i+1)%n) {
+      const p = open_ends[i];
+      if (!p) continue;
+      let h = p[0];
+      let e = p[3];
+      const c = e[2];
+
+      let i2=i, p2;
+      for (;;) {
+        p2 = open_ends[i2=(i2+1)%n];
+        if (p2 && p2[3][2]===c) break;
       }
-      e1.push(e2);
-      e2.push(e1);
-      closed_chains.push(e1);
-      open_ends[i] = null;
-      open_ends[j] = null;
+      const h2 = p2[0];
+      const e2 = p2[3];
+
+      if (e2[2]===c && data[hull[h]][2] < data[hull[(h+1)%nh]][2]) {
+        do {
+          const k = hull[h=(h+1)%nh]*2;
+          e.push((e = [,,,,points[k],points[k+1],e]));
+        } while (h!==h2);
+        e.push(e2);
+        e2.push(e);
+        open_ends[i ] = null;
+        open_ends[i2] = null;
+        const o = p[2], o2 = p2[2];
+        if (o2===o) closed_chains.push(p[3]);
+        else open_ends[open_ends.findIndex(p => p && p[2]===o2)][2] = o;
+        --m;
+      }
+      // if (m<3) break;
     }
+
+// ------------
+    // for (let i=0, n=open_ends.length, nh=hull.length; i<n; ++i) {
+    //   const p1 = open_ends[i];
+    //   if (!p1) continue;
+    //   let j=i, p2;
+    //   do {
+    //     p2 = open_ends[j=(j+1)%n];
+    //   } while (!p2);
+    //   const e1 = p1[3];
+    //   let e2 = p2[3];
+    //   if (e1[2] < e2[2] || p1[2]===p2[2]) { // fill forward
+    //     while (!p2 || p1[2]!==p2[2])
+    //       p2 = open_ends[j=(j+1)%n];
+    //     e2 = p2[3];
+    //     for (let h=p2[0], h1=p1[0]; h!==h1; h=(h||nh)-1) {
+    //       const k = hull[h]*2;
+    //       e2.push((e2 = [,,,, points[k], points[k+1], e2 ]));
+    //     }
+    //   } else { // fill backward
+    //     j = i;
+    //     do {
+    //       p2 = open_ends[j=(j||n)-1];
+    //     } while (!p2 || p1[2]!==p2[2]);
+    //     e2 = p2[3];
+    //     for (let h=p2[0], h1=p1[0]; h!==h1; ) {
+    //       const k = hull[h=(h+1)%nh]*2;
+    //       e2.push((e2 = [,,,, points[k], points[k+1], e2 ]));
+    //     }
+    //   }
+    //   e1.push(e2);
+    //   e2.push(e1);
+    //   closed_chains.push(e1);
+    //   open_ends[i] = null;
+    //   open_ends[j] = null;
+    // }
   }
 
   // Sort contours by area ==========================================
-  const c_indices = new Uint32Array(closed_chains.length);
-  { const c_areas = new Float32Array(closed_chains.length);
+  let c_indices;
+  if (ofill) {
+    c_indices = new Uint32Array(closed_chains.length);
+    const c_areas = new Float32Array(closed_chains.length);
     for (let i=closed_chains.length; i; ) { --i;
       let area = 0;
       const p0 = closed_chains[i];
@@ -408,29 +480,36 @@ function make_contour_plot(fig,{data,title,vars}) {
   }
 
   // Draw contours ==================================================
-  let g = svg.append('g').style('stroke','none');
+  let g = svg.append('g');
+  g.style(ofill ? 'stroke' : 'fill', 'none');
 
   g.selectAll('path').data(
-    c_indices
+    (ofill
+    ? function*(){
+        for (const i of c_indices) yield closed_chains[i];
+      }
+    : function*(){
+        for (const x of closed_chains) yield x;
+        for (const x of open_chains) yield x;
+      })()
   ).join('path')
-    .attrs(i => {
-      const p0 = closed_chains[i];
+    .attrs(p0 => {
       const c = scn(p0[2]);
-      let fill = 'none';
       let path = `M${round(p0[4])} ${round(p0[5])}`;
       let prev = p0, p = p0[6];
       for (;;) {
         if (p===p0) {
           path += 'z';
-          fill = c;
           break;
         }
         path += `L${round(p[4])} ${round(p[5])}`;
-        // if (p.length < 8) break; // for open contours
+        if (p.length < 8) break; // for open contours
         const j = p[6]==prev ? 7 : 6;
         p = (prev = p)[j];
       }
-      return { d: path, fill };
+      const attrs = { d: path };
+      attrs[ofill ? 'fill' : 'stroke'] = c;
+      return attrs;
     });
 
   { let hull_d;
@@ -441,7 +520,10 @@ function make_contour_plot(fig,{data,title,vars}) {
       hull_d += `L${round(points[h])} ${round(points[h+1])}`;
     }
     hull_d += 'z';
-    g.append('path').lower().attrs({ d: hull_d, fill: scn(0) });
+    g.append('path').lower().attrs({
+      d: hull_d, fill: (ofill ? scn(0) : null),
+      stroke: (ofill ? null : scn(0))
+    });
   }
 
   g = svg.append('g').attrs({

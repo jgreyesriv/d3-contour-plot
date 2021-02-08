@@ -5,6 +5,34 @@
 <title>Contour plots</title>
 <link rel="icon" type="image/svg+xml" href="icons/helmet.svg">
 <style>
+.flex {
+  display: flex;
+  justify-content: flex-start;
+  flex-wrap: wrap;
+}
+.flex > * {
+  display: inline-block;
+}
+.top {
+  vertical-align: top;
+}
+label {
+  user-select: none;
+  font-family: sans-serif;
+}
+
+#menu {
+  margin: 0 25px 0 0;
+}
+
+#plot {
+  margin: 0;
+}
+#plot > figcaption {
+  text-align: center;
+  font-family: sans-serif;
+}
+
 ul.file-tree {
   font-family: monospace;
 }
@@ -40,15 +68,6 @@ ul.file-tree li:not(.exp) ul {
   display: none;
 }
 
-#plot {
-  margin: 15px 0 0 0;
-  display: inline-block;
-}
-#plot > figcaption {
-  text-align: center;
-  font-family: sans-serif;
-}
-
 #github:hover .octo-arm { animation:octocat-wave 560ms ease-in-out; }
 @keyframes octocat-wave {
   0%,100%{transform:rotate(0)}
@@ -64,10 +83,13 @@ ul.file-tree li:not(.exp) ul {
 <script src="d3-selection-multi.v1.min.js"></script>
 <script src="main.js"></script>
 </head>
-<body>
+<body class="flex">
 
 <div id="menu"></div>
 <figure id="plot"></figure>
+<div id="options" class="top">
+  <label><input id="ofill" type="checkbox" checked>Fill</label>
+</div>
 
 <a id="github" target="_blank" aria-label="View source on GitHub">
 <svg width="80" height="80" viewBox="0 0 250 250" aria-hidden="true"
