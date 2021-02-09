@@ -1,24 +1,32 @@
 let repo = 'jgreyesriv/d3-contour-plot';
 let branch = 'master';
 
+function error(e) {
+  if (e instanceof Error) {
+    alert(e.message);
+    throw e;
+  } else {
+    alert(e);
+    throw new Error(e);
+  }
+}
+
 async function github_api(req) {
   let r = await fetch(
     'https://api.github.com/repos/'+repo+(req&&req[0]!=='/'?'/':'')+req,
     { method: 'GET',
       headers: { 'Accept': 'application/vnd.github.v3+json' }
     });
-  if (!r.ok) throw new Error(
-    `Error fetching "${req}": ${r.status}: ${r.statusText}`);
+  if (!r.ok) error(`Error fetching "${req}": ${r.status}: ${r.statusText}`);
   r = await r.json();
-  if ('message' in r) throw new Error(
-    `Error fetching "${req}": ${r.message}`);
+  if ('message' in r) error(`Error fetching "${req}": ${r.message}`);
   return r;
 }
 
 async function get_data_files() {
   const { tree, truncated } = await github_api(
     'git/trees/'+branch+':data?recursive=1');
-  if (truncated) throw new Error('Tree was truncated');
+  if (truncated) error('Tree was truncated');
   return tree;
 }
 
@@ -27,9 +35,8 @@ async function load_plot(path) {
   const r = await fetch(
     'https://raw.githubusercontent.com/'+repo+'/'+branch+'/data/'+path+'.json',
     { method: 'GET' });
-  if (!r.ok) throw new Error(
-    `Error fetching "${req}": ${r.status}: ${r.statusText}`);
-  plot_data = await r.json();
+  if (!r.ok) error(`Error fetching "${req}": ${r.status}: ${r.statusText}`);
+  plot_data = await r.json().catch(error);
   make_contour_plot();
 }
 
@@ -82,14 +89,18 @@ document.addEventListener('DOMContentLoaded', () => {
           this.parentNode.classList.toggle("exp");
         };
       }
-      const span = make(node,'li','span');
-      span.classList.add('file');
-      span.textContent = name.replace(/\.json$/,'');
-      span.onclick = function() {
-        const path = encodeURIComponent(f.path.replace(/\.json$/,''));
-        window.history.pushState({ path }, '', href+'?'+path);
-        load_plot(path);
-      };
+      { const path = encodeURIComponent(f.path.replace(/\.json$/,''));
+        const link = make(node,'li','a');
+        link.textContent = name.replace(/\.json$/,'');
+        link.href = 'https://raw.githubusercontent.com/'
+          + repo+'/'+branch+'/data/'+path+'.json';
+        link.target = '_blank';
+        link.onclick = function(e) {
+          e.preventDefault();
+          window.history.pushState({ path }, '', href+'?'+path);
+          load_plot(path);
+        };
+      }
     }
 
     if (search) {
@@ -371,25 +382,6 @@ function make_contour_plot({ofill}={}) {
     }
     open_ends.sort(([a1,a2],[b1,b2]) => a1-b1 || a2-b2);
 
-    // const c_open_ends = new Uint32Array(n);
-    // for (let i=n; i; ) { --i;
-    //   c_open_ends[i] = i;
-    // }
-    // c_open_ends.sort((a,b) => open_ends[b][3][2] - open_ends[a][3][2]);
-
-    // function next(i) {
-    //   for (;;) {
-    //     const x = open_ends[i=(i+1)%n];
-    //     if (x) return [x,i];
-    //   }
-    // }
-    // function prev(i) {
-    //   for (;;) {
-    //     const x = open_ends[i=(i||n)-1];
-    //     if (x) return [x,i];
-    //   }
-    // }
-
     for (let i=0, m=n/2; m; i=(i+1)%n) {
       const p = open_ends[i];
       if (!p) continue;
@@ -419,44 +411,7 @@ function make_contour_plot({ofill}={}) {
         else open_ends[open_ends.findIndex(p => p && p[2]===o2)][2] = o;
         --m;
       }
-      // if (m<3) break;
     }
-
-// ------------
-    // for (let i=0, n=open_ends.length, nh=hull.length; i<n; ++i) {
-    //   const p1 = open_ends[i];
-    //   if (!p1) continue;
-    //   let j=i, p2;
-    //   do {
-    //     p2 = open_ends[j=(j+1)%n];
-    //   } while (!p2);
-    //   const e1 = p1[3];
-    //   let e2 = p2[3];
-    //   if (e1[2] < e2[2] || p1[2]===p2[2]) { // fill forward
-    //     while (!p2 || p1[2]!==p2[2])
-    //       p2 = open_ends[j=(j+1)%n];
-    //     e2 = p2[3];
-    //     for (let h=p2[0], h1=p1[0]; h!==h1; h=(h||nh)-1) {
-    //       const k = hull[h]*2;
-    //       e2.push((e2 = [,,,, points[k], points[k+1], e2 ]));
-    //     }
-    //   } else { // fill backward
-    //     j = i;
-    //     do {
-    //       p2 = open_ends[j=(j||n)-1];
-    //     } while (!p2 || p1[2]!==p2[2]);
-    //     e2 = p2[3];
-    //     for (let h=p2[0], h1=p1[0]; h!==h1; ) {
-    //       const k = hull[h=(h+1)%nh]*2;
-    //       e2.push((e2 = [,,,, points[k], points[k+1], e2 ]));
-    //     }
-    //   }
-    //   e1.push(e2);
-    //   e2.push(e1);
-    //   closed_chains.push(e1);
-    //   open_ends[i] = null;
-    //   open_ends[j] = null;
-    // }
   }
 
   // Sort contours by area ==========================================
@@ -538,20 +493,6 @@ function make_contour_plot({ofill}={}) {
   g.append('text').attrs({
     x: margin.left+5, y: margin.top+10, 'text-anchor': 'start'
   }).text(vars[1]);
-
-  // ================================================================
-  // draw triangulation
-  // svg.append('path').attrs({
-  //   d: delaunay.render(),
-  //   fill: 'none',
-  //   stroke: '#000'
-  // });
-
-  // svg.append('g').selectAll('circle').data(hull.slice(0,2)).join('circle')
-  //   .attrs((h,i) => ({
-  //     cx: points[h*2], cy: points[h*2+1], r: 3-i,
-  //     fill: 'gray', stroke: 'black'
-  //   }));
 }
 
 const dummy_a = document.createElement('a');
@@ -578,7 +519,9 @@ function save_svg(svg) {
     ],
     { type:"image/svg+xml;charset=utf-8" }
   ));
-  dummy_a.download = 'plot.svg';
+  dummy_a.download =
+    decodeURIComponent(window.location.search.match(/(?<=\?)[^&]*/))
+    .replace('/',' ') + '.svg';
   dummy_a.click();
 }
 
