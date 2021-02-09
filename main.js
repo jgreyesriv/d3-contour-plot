@@ -521,7 +521,7 @@ function save_svg(svg) {
   ));
   dummy_a.download =
     decodeURIComponent(window.location.search.match(/(?<=\?)[^&]*/))
-    .replace('/',' ') + '.svg';
+    .replaceAll('/',' ') + '.svg';
   dummy_a.click();
 }
 
