@@ -148,7 +148,7 @@ function make_contour_plot({ofill}={}) {
         width  = 500 + margin.left + margin.right + margin.z,
         height = 500 + margin.bottom + margin.top;
 
-  const ncont = 4;
+  const ncont = 28;
 
   const sx = d3.scaleLinear()
     .domain(d3.extent(data, d => d[0])).nice()
