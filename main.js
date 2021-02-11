@@ -1,34 +1,43 @@
 let repo = 'jgreyesriv/d3-contour-plot';
 let branch = 'master';
 
+function error(e) {
+  if (e instanceof Error) {
+    alert(e.message);
+    throw e;
+  } else {
+    alert(e);
+    throw new Error(e);
+  }
+}
+
 async function github_api(req) {
   let r = await fetch(
     'https://api.github.com/repos/'+repo+(req&&req[0]!=='/'?'/':'')+req,
     { method: 'GET',
       headers: { 'Accept': 'application/vnd.github.v3+json' }
     });
-  if (!r.ok) throw new Error(
-    `Error fetching "${req}": ${r.status}: ${r.statusText}`);
+  if (!r.ok) error(`Error fetching "${req}": ${r.status}: ${r.statusText}`);
   r = await r.json();
-  if ('message' in r) throw new Error(
-    `Error fetching "${req}": ${r.message}`);
+  if ('message' in r) error(`Error fetching "${req}": ${r.message}`);
   return r;
 }
 
 async function get_data_files() {
   const { tree, truncated } = await github_api(
     'git/trees/'+branch+':data?recursive=1');
-  if (truncated) throw new Error('Tree was truncated');
+  if (truncated) error('Tree was truncated');
   return tree;
 }
 
+let plot_data;
 async function load_plot(path) {
   const r = await fetch(
     'https://raw.githubusercontent.com/'+repo+'/'+branch+'/data/'+path+'.json',
     { method: 'GET' });
-  if (!r.ok) throw new Error(
-    `Error fetching "${req}": ${r.status}: ${r.statusText}`);
-  make_contour_plot(clear(_id('plot')), await r.json());
+  if (!r.ok) error(`Error fetching "${req}": ${r.status}: ${r.statusText}`);
+  plot_data = await r.json().catch(error);
+  make_contour_plot();
 }
 
 const _id = id => document.getElementById(id);
@@ -45,7 +54,7 @@ function clear(x) {
 const round = x => x.toFixed(4).replace(/\.?0*$/,'');
 
 document.addEventListener('DOMContentLoaded', () => {
-  const search = window.location.search;
+  const search = window.location.search.match(/(?<=\?)[^&]*/);
   const href = window.location.href.replace(/\?.*/,'');
   { const m = href.match(/^https?:\/\/([^\/]+)\.github\.io(\/[^\/]+)/);
     if (m) repo = m[1]+m[2];
@@ -80,28 +89,42 @@ document.addEventListener('DOMContentLoaded', () => {
           this.parentNode.classList.toggle("exp");
         };
       }
-      const span = make(node,'li','span');
-      span.classList.add('file');
-      span.textContent = name.replace(/\.json$/,'');
-      span.onclick = function() {
-        const path = encodeURIComponent(f.path.replace(/\.json$/,''));
-        window.history.pushState({ path }, '', href+'?'+path);
-        load_plot(path);
-      };
+      { const path = encodeURIComponent(f.path.replace(/\.json$/,''));
+        const link = make(node,'li','a');
+        link.textContent = name.replace(/\.json$/,'');
+        link.href = 'https://raw.githubusercontent.com/'
+          + repo+'/'+branch+'/data/'+path+'.json';
+        link.target = '_blank';
+        link.onclick = function(e) {
+          e.preventDefault();
+          window.history.pushState({ path }, '', href+'?'+path);
+          load_plot(path);
+        };
+      }
     }
 
-    if (search.length>1)
-      load_plot(search.slice(1)).catch(e => {
+    if (search) {
+      const path = search[0];
+      load_plot(path).then(() => {
+        window.history.replaceState({ path }, '', href+'?'+path);
+      }).catch(e => {
         console.error(e);
         window.history.replaceState({ }, '', href);
       });
+    }
   })();
+
+  _id('ofill').onchange = function(e) {
+    make_contour_plot({ ofill: this.checked});
+  };
 });
 window.onpopstate = function(e) {
   load_plot(e.state.path);
 };
 
-function make_contour_plot(fig,{data,title,vars}) {
+function make_contour_plot({ofill}={}) {
+  const { data, title, vars } = plot_data;
+
   if (!Array.isArray(data)) {
     alert('data must be an array');
     return;
@@ -111,6 +134,9 @@ function make_contour_plot(fig,{data,title,vars}) {
     return;
   }
 
+  if (ofill===undefined) ofill = _id('ofill').checked;
+
+  const fig = clear(_id('plot'));
   { const cap = make(fig,'figcaption');
     title.split(/\^(\d+)/).forEach((x,i) => {
       if (i%2) make(cap,'sup').textContent = x;
@@ -324,15 +350,18 @@ function make_contour_plot(fig,{data,title,vars}) {
     }
   }
 
-  { // Fill contours ================================================
-    const open_ends = Array(open_chains.length*2);
+  if (ofill) { // Complete contours =================================
+    const n  = open_chains.length*2;
+    const nh = hull.length;
+
+    const open_ends = Array(n);
     for (let i=open_chains.length; i;) {
       const p0 = open_chains[--i];
       let prev = p0, p = p0[6];
       for (;;) {
         if (p[3]==null) break;
-        const i = p[6]==prev ? 7 : 6;
-        p = (prev = p)[i];
+        const j = p[6]==prev ? 7 : 6;
+        p = (prev = p)[j];
       }
       p = [ p0, p ];
 
@@ -353,45 +382,43 @@ function make_contour_plot(fig,{data,title,vars}) {
     }
     open_ends.sort(([a1,a2],[b1,b2]) => a1-b1 || a2-b2);
 
-    for (let i=0, n=open_ends.length, nh=hull.length; i<n; ++i) {
-      const p1 = open_ends[i];
-      if (!p1) continue;
-      let j=i, p2;
-      do {
-        p2 = open_ends[j=(j+1)%n];
-      } while (!p2);
-      const e1 = p1[3];
-      let e2 = p2[3];
-      if (e1[2] < e2[2] || p1[2]===p2[2]) { // fill forward
-        while (!p2 || p1[2]!==p2[2])
-          p2 = open_ends[j=(j+1)%n];
-        e2 = p2[3];
-        for (let h=p2[0], h1=p1[0]; h!==h1; h=(h||nh)-1) {
-          const k = hull[h]*2;
-          e2.push((e2 = [,,,, points[k], points[k+1], e2 ]));
-        }
-      } else { // fill backward
-        j = i;
-        do {
-          p2 = open_ends[j=(j||n)-1];
-        } while (!p2 || p1[2]!==p2[2]);
-        e2 = p2[3];
-        for (let h=p2[0], h1=p1[0]; h!==h1; ) {
-          const k = hull[h=(h+1)%nh]*2;
-          e2.push((e2 = [,,,, points[k], points[k+1], e2 ]));
-        }
+    for (let i=0, m=n/2; m; i=(i+1)%n) {
+      const p = open_ends[i];
+      if (!p) continue;
+      let h = p[0];
+      let e = p[3];
+      const c = e[2];
+
+      let i2=i, p2;
+      for (;;) {
+        p2 = open_ends[i2=(i2+1)%n];
+        if (p2 && p2[3][2]===c) break;
       }
-      e1.push(e2);
-      e2.push(e1);
-      closed_chains.push(e1);
-      open_ends[i] = null;
-      open_ends[j] = null;
+      const h2 = p2[0];
+      const e2 = p2[3];
+
+      if (e2[2]===c && data[hull[h]][2] < data[hull[(h+1)%nh]][2]) {
+        do {
+          const k = hull[h=(h+1)%nh]*2;
+          e.push((e = [,,,,points[k],points[k+1],e]));
+        } while (h!==h2);
+        e.push(e2);
+        e2.push(e);
+        open_ends[i ] = null;
+        open_ends[i2] = null;
+        const o = p[2], o2 = p2[2];
+        if (o2===o) closed_chains.push(p[3]);
+        else open_ends[open_ends.findIndex(p => p && p[2]===o2)][2] = o;
+        --m;
+      }
     }
   }
 
   // Sort contours by area ==========================================
-  const c_indices = new Uint32Array(closed_chains.length);
-  { const c_areas = new Float32Array(closed_chains.length);
+  let c_indices;
+  if (ofill) {
+    c_indices = new Uint32Array(closed_chains.length);
+    const c_areas = new Float32Array(closed_chains.length);
     for (let i=closed_chains.length; i; ) { --i;
       let area = 0;
       const p0 = closed_chains[i];
@@ -408,29 +435,36 @@ function make_contour_plot(fig,{data,title,vars}) {
   }
 
   // Draw contours ==================================================
-  let g = svg.append('g').style('stroke','none');
+  let g = svg.append('g');
+  g.style(ofill ? 'stroke' : 'fill', 'none');
 
   g.selectAll('path').data(
-    c_indices
+    (ofill
+    ? function*(){
+        for (const i of c_indices) yield closed_chains[i];
+      }
+    : function*(){
+        for (const x of closed_chains) yield x;
+        for (const x of open_chains) yield x;
+      })()
   ).join('path')
-    .attrs(i => {
-      const p0 = closed_chains[i];
+    .attrs(p0 => {
       const c = scn(p0[2]);
-      let fill = 'none';
       let path = `M${round(p0[4])} ${round(p0[5])}`;
       let prev = p0, p = p0[6];
       for (;;) {
         if (p===p0) {
           path += 'z';
-          fill = c;
           break;
         }
         path += `L${round(p[4])} ${round(p[5])}`;
-        // if (p.length < 8) break; // for open contours
+        if (p.length < 8) break; // for open contours
         const j = p[6]==prev ? 7 : 6;
         p = (prev = p)[j];
       }
-      return { d: path, fill };
+      const attrs = { d: path };
+      attrs[ofill ? 'fill' : 'stroke'] = c;
+      return attrs;
     });
 
   { let hull_d;
@@ -441,7 +475,10 @@ function make_contour_plot(fig,{data,title,vars}) {
       hull_d += `L${round(points[h])} ${round(points[h+1])}`;
     }
     hull_d += 'z';
-    g.append('path').lower().attrs({ d: hull_d, fill: scn(0) });
+    g.append('path').lower().attrs({
+      d: hull_d, fill: (ofill ? scn(0) : null),
+      stroke: (ofill ? null : scn(0))
+    });
   }
 
   g = svg.append('g').attrs({
@@ -456,20 +493,6 @@ function make_contour_plot(fig,{data,title,vars}) {
   g.append('text').attrs({
     x: margin.left+5, y: margin.top+10, 'text-anchor': 'start'
   }).text(vars[1]);
-
-  // ================================================================
-  // draw triangulation
-  // svg.append('path').attrs({
-  //   d: delaunay.render(),
-  //   fill: 'none',
-  //   stroke: '#000'
-  // });
-
-  // svg.append('g').selectAll('circle').data(hull.slice(0,2)).join('circle')
-  //   .attrs((h,i) => ({
-  //     cx: points[h*2], cy: points[h*2+1], r: 3-i,
-  //     fill: 'gray', stroke: 'black'
-  //   }));
 }
 
 const dummy_a = document.createElement('a');
@@ -496,7 +519,9 @@ function save_svg(svg) {
     ],
     { type:"image/svg+xml;charset=utf-8" }
   ));
-  dummy_a.download = 'plot.svg';
+  dummy_a.download =
+    decodeURIComponent(window.location.search.match(/(?<=\?)[^&]*/))
+    .replaceAll('/',' ') + '.svg';
   dummy_a.click();
 }
 
