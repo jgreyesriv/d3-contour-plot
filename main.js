@@ -427,6 +427,8 @@ function make_contour_plot() {
     for (let i=nclosed1; i<nclosed2; ++i)
       polygons.push(make_polygon(closed_chains[i]));
 
+    // check if there is a original closed contour
+    // that is not inside another one
     closed1: for (let i=0; i<nclosed1; ++i) {
       for (let j=0; j<nclosed2; ++j)
         if (d3.polygonContains(polygons[j],polygons[i][0]))
@@ -436,19 +438,10 @@ function make_contour_plot() {
     }
 
     // Sort contours by area ========================================
-    c_indices = new Uint32Array(closed_chains.length);
-    const c_areas = new Float32Array(closed_chains.length);
-    for (let i=closed_chains.length; i; ) {
-      let area = 0;
-      const p0 = closed_chains[--i];
-      let p1 = p0, p = p0[6];
-      for (;;) {
-        area += p1[4]*p[5] - p1[5]*p[4];
-        if (p===p0) break;
-        const j = p[6]==p1 ? 7 : 6;
-        p = (p1 = p)[j];
-      }
-      c_areas[c_indices[i] = i] = Math.abs(area);
+    c_indices = new Uint32Array(nclosed2);
+    const c_areas = new Float32Array(nclosed2);
+    for (let i=nclosed2; i; ) { --i;
+      c_areas[c_indices[i] = i] = Math.abs(d3.polygonArea(polygons[i]));
     }
     c_indices.sort((a,b) => c_areas[b] - c_areas[a]);
   }
