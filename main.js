@@ -96,7 +96,9 @@ document.addEventListener('DOMContentLoaded', () => {
         link.target = '_blank';
         link.onclick = function(e) {
           e.preventDefault();
-          window.history.pushState({ path }, '', href+'?'+path);
+          const s = window.history.state;
+          if (!(s && s.path===path))
+            window.history.pushState({ path }, '', href+'?'+path);
           load_plot(path);
         };
       }
@@ -117,7 +119,7 @@ document.addEventListener('DOMContentLoaded', () => {
     x.onchange = make_contour_plot;
 });
 window.onpopstate = function(e) {
-  load_plot(e.state.path);
+  if (e.state!==null) load_plot(e.state.path);
 };
 
 function make_contour_plot() {
@@ -144,7 +146,7 @@ function make_contour_plot() {
     });
   }
 
-  const margin = { top: 10, right: 50, bottom: 20, left: 30, z: 25, zleft: 2 },
+  const margin = { top: 10, right: 50, bottom: 20, left: 30, z: 25, zleft: 3 },
         width  = 500 + margin.left + margin.right + margin.z,
         height = 500 + margin.bottom + margin.top;
 
