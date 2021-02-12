@@ -144,7 +144,7 @@ function make_contour_plot() {
     });
   }
 
-  const margin = { top: 10, right: 50, bottom: 20, left: 30, z: 25 },
+  const margin = { top: 10, right: 50, bottom: 20, left: 30, z: 25, zleft: 2 },
         width  = 500 + margin.left + margin.right + margin.z,
         height = 500 + margin.bottom + margin.top;
 
@@ -185,7 +185,7 @@ function make_contour_plot() {
     transform: `translate(${margin.left},0)`
   }).call(ay);
   g_axes.append('g').attrs({
-    transform: `translate(${width-margin.right},0)`
+    transform: `translate(${width-margin.right+margin.zleft},0)`
   }).call(az);
   g_axes.selectAll('line,path').attr('stroke','#000');
   g_axes.selectAll('text').attr('fill','#000');
@@ -202,7 +202,7 @@ function make_contour_plot() {
 
     svg.append('g').style('stroke','none')
       .selectAll("rect").data(d3.range(ncont)).join("rect")
-      .attrs({ x: width-margin.right-margin.z, width: margin.z })
+      .attrs({ x: width-margin.right-margin.z+margin.zleft, width: margin.z })
       .attrs(i => ({
         y: color_scale_edges[i],
         height: color_scale_edges[i+1] - color_scale_edges[i] + 1,
@@ -230,6 +230,15 @@ function make_contour_plot() {
       if (v1 > v2) [v1,v2] = [v2,v1];
       cont_pts.push([ v1, v2, c, t, x0 + dxdz*z, y0 + dydz*z ]); // *****
     }
+  });
+  const make_polygon = ((p0) => {
+    const polygon = [ [p0[4],p0[5]] ];
+    for (let p1 = p0, p = p0[6]; p!==p0; ) {
+      polygon.push([p[4],p[5]]);
+      const j = p[6]==p1 ? 7 : 6;
+      p = (p1 = p)[j];
+    }
+    return polygon;
   });
 
   { const point = (i => [ points[i*2], points[i*2+1], data[i][2], i ]);
@@ -335,25 +344,22 @@ function make_contour_plot() {
   }
 
   let c_indices;
+  let hull_color = 0;
 
   if (opts.fill) {
     const n  = open_chains.length*2;
     const nh = hull.length;
+    const nclosed1 = closed_chains.length;
+    const polygons = [ ];
 
     // Fix descending closed contours ===============================
     for (const p0 of closed_chains) {
-      const polygon = [ [p0[4],p0[5]] ];
-      for (let p1 = p0, p = p0[6]; p!==p0; ) {
-        polygon.push([p[4],p[5]]);
-        const j = p[6]==p1 ? 7 : 6;
-        p = (p1 = p)[j];
-      }
-      // descending if ref is inside
       const ref = p0[ data[p0[0]][2] < data[p0[1]][2] ? 0 : 1 ]*2;
-      if (d3.polygonContains( polygon, [ points[ref], points[ref+1] ] )) {
-        console.log(p0[2]);
-        --p0[2];
-      }
+      const polygon = make_polygon(p0);
+      polygons.push(polygon);
+      if (d3.polygonContains( // descending if ref is inside
+        polygon, [ points[ref], points[ref+1] ]
+      )) --p0[2];
     }
 
     // Complete contours ============================================
@@ -416,6 +422,19 @@ function make_contour_plot() {
       }
     }
 
+    // bottom color =================================================
+    const nclosed2 = closed_chains.length;
+    for (let i=nclosed1; i<nclosed2; ++i)
+      polygons.push(make_polygon(closed_chains[i]));
+
+    closed1: for (let i=0; i<nclosed1; ++i) {
+      for (let j=0; j<nclosed2; ++j)
+        if (d3.polygonContains(polygons[j],polygons[i][0]))
+          continue closed1;
+      hull_color = closed_chains[i][2]+1;
+      break;
+    }
+
     // Sort contours by area ========================================
     c_indices = new Uint32Array(closed_chains.length);
     const c_areas = new Float32Array(closed_chains.length);
@@ -449,40 +468,37 @@ function make_contour_plot() {
       })()
   ).join('path')
     .attrs(p0 => {
-      const c = scn(p0[2]);
-      let path = `M${round(p0[4])} ${round(p0[5])}`;
+      let d = `M${round(p0[4])} ${round(p0[5])}`;
       let prev = p0, p = p0[6];
       for (;;) {
         if (p===p0) {
-          path += 'z';
+          d += 'z';
           break;
         }
-        path += `L${round(p[4])} ${round(p[5])}`;
+        d += `L${round(p[4])} ${round(p[5])}`;
         if (p.length < 8) break; // for open contours
         const j = p[6]==prev ? 7 : 6;
         p = (prev = p)[j];
       }
-      const attrs = { d: path };
-      attrs[opts.fill ? 'fill' : 'stroke'] = c;
+      const attrs = { d };
+      attrs[opts.fill ? 'fill' : 'stroke'] = scn(p0[2]);
       return attrs;
     });
 
-  { let hull_d;
-    let h = hull[0]*2;
-    hull_d = `M${round(points[h])} ${round(points[h+1])}`;
+  { let h = hull[0]*2;
+    let d = `M${round(points[h])} ${round(points[h+1])}`;
     for (let i=hull.length; i; ) {
       h = hull[--i]*2;
-      hull_d += `L${round(points[h])} ${round(points[h+1])}`;
+      d += `L${round(points[h])} ${round(points[h+1])}`;
     }
-    hull_d += 'z';
-    g.append('path').lower().attrs({
-      d: hull_d, fill: (opts.fill ? scn(0) : null),
-      stroke: (opts.fill ? null : scn(0))
-    });
+    d += 'z';
+    const attrs = { d };
+    attrs[opts.fill ? 'fill' : 'stroke'] = scn(hull_color);
+    g.append('path').lower().attrs(attrs);
   }
 
   if (opts.tria) { // draw triangulation
-    svg.append('g').append('path').attrs({
+    svg.append('path').attrs({
       d: delaunay.render(),
       fill: 'none', stroke: '#000', 'stroke-width': 0.5
     });
