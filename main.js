@@ -114,15 +114,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   })();
 
-  _id('ofill').onchange = function(e) {
-    make_contour_plot({ ofill: this.checked});
-  };
+  for (const x of _id('options').querySelectorAll('input[type="checkbox"]'))
+    x.onchange = make_contour_plot;
 });
 window.onpopstate = function(e) {
   load_plot(e.state.path);
 };
 
-function make_contour_plot({ofill}={}) {
+function make_contour_plot() {
   const { data, title, vars } = plot_data;
 
   if (!Array.isArray(data)) {
@@ -134,7 +133,9 @@ function make_contour_plot({ofill}={}) {
     return;
   }
 
-  if (ofill===undefined) ofill = _id('ofill').checked;
+  const opts = { };
+  for (const x of _id('options').querySelectorAll('input[type="checkbox"]'))
+    opts[x.name] = x.checked;
 
   const fig = clear(_id('plot'));
   { const cap = make(fig,'figcaption');
@@ -213,13 +214,6 @@ function make_contour_plot({ofill}={}) {
   const delaunay = d3.Delaunay.from(data, d => sx(d[0]), d => sy(d[1]));
   const {points, halfedges, triangles, hull} = delaunay;
 
-  // draw triangulation
-  // svg.append('path').attrs({
-  //   d: delaunay.render(),
-  //   fill: 'none',
-  //   stroke: '#000'
-  // });
-
   const [z0,z3] = sz.domain();
   const dz = (z3-z0)/ncont;
 
@@ -261,15 +255,6 @@ function make_contour_plot({ofill}={}) {
     c_points[++j] = cont_pts[i][5];
     c_points[++j] = cont_pts[i][2];
   }
-
-  // // draw interpolation points
-  // svg.append('g').selectAll('circle').data(
-  //   d3.range(cont_pts.length)
-  // ).join('circle')
-  //   .attrs(i => ({
-  //     cx: c_points[i*=3], cy: c_points[++i], r: 2,
-  //     fill: scn(c_points[++i])
-  //   }));
 
   // Connect points on contours =====================================
   const open_chains = [ ];
@@ -350,7 +335,7 @@ function make_contour_plot({ofill}={}) {
     }
   }
 
-  if (ofill) { // Complete contours =================================
+  if (opts.fill) { // Complete contours =================================
     const n  = open_chains.length*2;
     const nh = hull.length;
 
@@ -416,7 +401,7 @@ function make_contour_plot({ofill}={}) {
 
   // Sort contours by area ==========================================
   let c_indices;
-  if (ofill) {
+  if (opts.fill) {
     c_indices = new Uint32Array(closed_chains.length);
     const c_areas = new Float32Array(closed_chains.length);
     for (let i=closed_chains.length; i; ) { --i;
@@ -436,10 +421,10 @@ function make_contour_plot({ofill}={}) {
 
   // Draw contours ==================================================
   let g = svg.append('g');
-  g.style(ofill ? 'stroke' : 'fill', 'none');
+  g.style(opts.fill ? 'stroke' : 'fill', 'none');
 
   g.selectAll('path').data(
-    (ofill
+    (opts.fill
     ? function*(){
         for (const i of c_indices) yield closed_chains[i];
       }
@@ -463,7 +448,7 @@ function make_contour_plot({ofill}={}) {
         p = (prev = p)[j];
       }
       const attrs = { d: path };
-      attrs[ofill ? 'fill' : 'stroke'] = c;
+      attrs[opts.fill ? 'fill' : 'stroke'] = c;
       return attrs;
     });
 
@@ -476,11 +461,32 @@ function make_contour_plot({ofill}={}) {
     }
     hull_d += 'z';
     g.append('path').lower().attrs({
-      d: hull_d, fill: (ofill ? scn(0) : null),
-      stroke: (ofill ? null : scn(0))
+      d: hull_d, fill: (opts.fill ? scn(0) : null),
+      stroke: (opts.fill ? null : scn(0))
     });
   }
 
+  if (opts.tria) { // draw triangulation
+    svg.append('g').append('path').attrs({
+      d: delaunay.render(),
+      fill: 'none', stroke: '#000', 'stroke-width': 0.5
+    });
+  }
+  if (opts.dpts) { // draw data points
+    svg.append('g').attrs({ stroke: '#000', 'stroke-width': 0.5 })
+      .selectAll('circle').data(data).join('circle')
+      .attrs(d => ({ cx: sx(d[0]), cy: sy(d[1]), r: 2, fill: sc(d[2]) }));
+  }
+  if (opts.ipts) { // draw interpolation points
+    svg.append('g').attrs({ stroke: '#fff', 'stroke-width': 0.5 })
+      .selectAll('circle').data(d3.range(cont_pts.length)).join('circle')
+      .attrs(i => ({
+        cx: c_points[i*=3], cy: c_points[++i], r: 2,
+        fill: scn(c_points[++i])
+      }));
+  }
+
+  // label axes
   g = svg.append('g').attrs({
     'font-family': 'sans-serif',
     'font-size': 12,
