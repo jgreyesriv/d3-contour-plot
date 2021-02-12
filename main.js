@@ -50,7 +50,6 @@ function clear(x) {
   for (let c; c = x.firstChild; ) x.removeChild(c);
   return x;
 }
-
 const round = x => x.toFixed(4).replace(/\.?0*$/,'');
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -229,7 +228,7 @@ function make_contour_plot() {
       if (z > p2[2]) break;
       let v1 = p1[3], v2 = p2[3];
       if (v1 > v2) [v1,v2] = [v2,v1];
-      cont_pts.push([ v1, v2, c, t, x0 + dxdz*z, y0 + dydz*z ]);
+      cont_pts.push([ v1, v2, c, t, x0 + dxdz*z, y0 + dydz*z ]); // *****
     }
   });
 
@@ -335,10 +334,29 @@ function make_contour_plot() {
     }
   }
 
-  if (opts.fill) { // Complete contours =================================
+  let c_indices;
+
+  if (opts.fill) {
     const n  = open_chains.length*2;
     const nh = hull.length;
 
+    // Fix descending closed contours ===============================
+    for (const p0 of closed_chains) {
+      const polygon = [ [p0[4],p0[5]] ];
+      for (let p1 = p0, p = p0[6]; p!==p0; ) {
+        polygon.push([p[4],p[5]]);
+        const j = p[6]==p1 ? 7 : 6;
+        p = (p1 = p)[j];
+      }
+      // descending if ref is inside
+      const ref = p0[ data[p0[0]][2] < data[p0[1]][2] ? 0 : 1 ]*2;
+      if (d3.polygonContains( polygon, [ points[ref], points[ref+1] ] )) {
+        console.log(p0[2]);
+        --p0[2];
+      }
+    }
+
+    // Complete contours ============================================
     const open_ends = Array(n);
     for (let i=open_chains.length; i;) {
       const p0 = open_chains[--i];
@@ -397,16 +415,13 @@ function make_contour_plot() {
         --m;
       }
     }
-  }
 
-  // Sort contours by area ==========================================
-  let c_indices;
-  if (opts.fill) {
+    // Sort contours by area ========================================
     c_indices = new Uint32Array(closed_chains.length);
     const c_areas = new Float32Array(closed_chains.length);
-    for (let i=closed_chains.length; i; ) { --i;
+    for (let i=closed_chains.length; i; ) {
       let area = 0;
-      const p0 = closed_chains[i];
+      const p0 = closed_chains[--i];
       let p1 = p0, p = p0[6];
       for (;;) {
         area += p1[4]*p[5] - p1[5]*p[4];
