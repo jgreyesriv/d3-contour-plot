@@ -50,7 +50,6 @@ function clear(x) {
   for (let c; c = x.firstChild; ) x.removeChild(c);
   return x;
 }
-
 const round = x => x.toFixed(4).replace(/\.?0*$/,'');
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -97,7 +96,9 @@ document.addEventListener('DOMContentLoaded', () => {
         link.target = '_blank';
         link.onclick = function(e) {
           e.preventDefault();
-          window.history.pushState({ path }, '', href+'?'+path);
+          const s = window.history.state;
+          if (!(s && s.path===path))
+            window.history.pushState({ path }, '', href+'?'+path);
           load_plot(path);
         };
       }
@@ -114,15 +115,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   })();
 
-  _id('ofill').onchange = function(e) {
-    make_contour_plot({ ofill: this.checked});
-  };
+  for (const x of _id('options').querySelectorAll('input[type="checkbox"]'))
+    x.onchange = make_contour_plot;
 });
 window.onpopstate = function(e) {
-  load_plot(e.state.path);
+  if (e.state!==null) load_plot(e.state.path);
 };
 
-function make_contour_plot({ofill}={}) {
+function make_contour_plot() {
   const { data, title, vars } = plot_data;
 
   if (!Array.isArray(data)) {
@@ -134,7 +134,9 @@ function make_contour_plot({ofill}={}) {
     return;
   }
 
-  if (ofill===undefined) ofill = _id('ofill').checked;
+  const opts = { };
+  for (const x of _id('options').querySelectorAll('input[type="checkbox"]'))
+    opts[x.name] = x.checked;
 
   const fig = clear(_id('plot'));
   { const cap = make(fig,'figcaption');
@@ -144,7 +146,7 @@ function make_contour_plot({ofill}={}) {
     });
   }
 
-  const margin = { top: 10, right: 50, bottom: 20, left: 30, z: 25 },
+  const margin = { top: 10, right: 50, bottom: 20, left: 30, z: 25, zleft: 3 },
         width  = 500 + margin.left + margin.right + margin.z,
         height = 500 + margin.bottom + margin.top;
 
@@ -185,7 +187,7 @@ function make_contour_plot({ofill}={}) {
     transform: `translate(${margin.left},0)`
   }).call(ay);
   g_axes.append('g').attrs({
-    transform: `translate(${width-margin.right},0)`
+    transform: `translate(${width-margin.right+margin.zleft},0)`
   }).call(az);
   g_axes.selectAll('line,path').attr('stroke','#000');
   g_axes.selectAll('text').attr('fill','#000');
@@ -202,7 +204,7 @@ function make_contour_plot({ofill}={}) {
 
     svg.append('g').style('stroke','none')
       .selectAll("rect").data(d3.range(ncont)).join("rect")
-      .attrs({ x: width-margin.right-margin.z, width: margin.z })
+      .attrs({ x: width-margin.right-margin.z+margin.zleft, width: margin.z })
       .attrs(i => ({
         y: color_scale_edges[i],
         height: color_scale_edges[i+1] - color_scale_edges[i] + 1,
@@ -212,13 +214,6 @@ function make_contour_plot({ofill}={}) {
 
   const delaunay = d3.Delaunay.from(data, d => sx(d[0]), d => sy(d[1]));
   const {points, halfedges, triangles, hull} = delaunay;
-
-  // draw triangulation
-  // svg.append('path').attrs({
-  //   d: delaunay.render(),
-  //   fill: 'none',
-  //   stroke: '#000'
-  // });
 
   const [z0,z3] = sz.domain();
   const dz = (z3-z0)/ncont;
@@ -235,8 +230,17 @@ function make_contour_plot({ofill}={}) {
       if (z > p2[2]) break;
       let v1 = p1[3], v2 = p2[3];
       if (v1 > v2) [v1,v2] = [v2,v1];
-      cont_pts.push([ v1, v2, c, t, x0 + dxdz*z, y0 + dydz*z ]);
+      cont_pts.push([ v1, v2, c, t, x0 + dxdz*z, y0 + dydz*z ]); // *****
     }
+  });
+  const make_polygon = ((p0) => {
+    const polygon = [ [p0[4],p0[5]] ];
+    for (let p1 = p0, p = p0[6]; p!==p0; ) {
+      polygon.push([p[4],p[5]]);
+      const j = p[6]==p1 ? 7 : 6;
+      p = (p1 = p)[j];
+    }
+    return polygon;
   });
 
   { const point = (i => [ points[i*2], points[i*2+1], data[i][2], i ]);
@@ -261,15 +265,6 @@ function make_contour_plot({ofill}={}) {
     c_points[++j] = cont_pts[i][5];
     c_points[++j] = cont_pts[i][2];
   }
-
-  // // draw interpolation points
-  // svg.append('g').selectAll('circle').data(
-  //   d3.range(cont_pts.length)
-  // ).join('circle')
-  //   .attrs(i => ({
-  //     cx: c_points[i*=3], cy: c_points[++i], r: 2,
-  //     fill: scn(c_points[++i])
-  //   }));
 
   // Connect points on contours =====================================
   const open_chains = [ ];
@@ -350,10 +345,26 @@ function make_contour_plot({ofill}={}) {
     }
   }
 
-  if (ofill) { // Complete contours =================================
+  let c_indices;
+  let hull_color = 0;
+
+  if (opts.fill) {
     const n  = open_chains.length*2;
     const nh = hull.length;
+    const nclosed1 = closed_chains.length;
+    const polygons = [ ];
 
+    // Fix descending closed contours ===============================
+    for (const p0 of closed_chains) {
+      const ref = p0[ data[p0[0]][2] < data[p0[1]][2] ? 0 : 1 ]*2;
+      const polygon = make_polygon(p0);
+      polygons.push(polygon);
+      if (d3.polygonContains( // descending if ref is inside
+        polygon, [ points[ref], points[ref+1] ]
+      )) --p0[2];
+    }
+
+    // Complete contours ============================================
     const open_ends = Array(n);
     for (let i=open_chains.length; i;) {
       const p0 = open_chains[--i];
@@ -412,34 +423,37 @@ function make_contour_plot({ofill}={}) {
         --m;
       }
     }
-  }
 
-  // Sort contours by area ==========================================
-  let c_indices;
-  if (ofill) {
-    c_indices = new Uint32Array(closed_chains.length);
-    const c_areas = new Float32Array(closed_chains.length);
-    for (let i=closed_chains.length; i; ) { --i;
-      let area = 0;
-      const p0 = closed_chains[i];
-      let p1 = p0, p = p0[6];
-      for (;;) {
-        area += p1[4]*p[5] - p1[5]*p[4];
-        if (p===p0) break;
-        const j = p[6]==p1 ? 7 : 6;
-        p = (p1 = p)[j];
-      }
-      c_areas[c_indices[i] = i] = Math.abs(area);
+    // bottom color =================================================
+    const nclosed2 = closed_chains.length;
+    for (let i=nclosed1; i<nclosed2; ++i)
+      polygons.push(make_polygon(closed_chains[i]));
+
+    // check if there is a original closed contour
+    // that is not inside another one
+    closed1: for (let i=0; i<nclosed1; ++i) {
+      for (let j=0; j<nclosed2; ++j)
+        if (d3.polygonContains(polygons[j],polygons[i][0]))
+          continue closed1;
+      hull_color = closed_chains[i][2]+1;
+      break;
+    }
+
+    // Sort contours by area ========================================
+    c_indices = new Uint32Array(nclosed2);
+    const c_areas = new Float32Array(nclosed2);
+    for (let i=nclosed2; i; ) { --i;
+      c_areas[c_indices[i] = i] = Math.abs(d3.polygonArea(polygons[i]));
     }
     c_indices.sort((a,b) => c_areas[b] - c_areas[a]);
   }
 
   // Draw contours ==================================================
   let g = svg.append('g');
-  g.style(ofill ? 'stroke' : 'fill', 'none');
+  g.style(opts.fill ? 'stroke' : 'fill', 'none');
 
   g.selectAll('path').data(
-    (ofill
+    (opts.fill
     ? function*(){
         for (const i of c_indices) yield closed_chains[i];
       }
@@ -449,38 +463,56 @@ function make_contour_plot({ofill}={}) {
       })()
   ).join('path')
     .attrs(p0 => {
-      const c = scn(p0[2]);
-      let path = `M${round(p0[4])} ${round(p0[5])}`;
+      let d = `M${round(p0[4])} ${round(p0[5])}`;
       let prev = p0, p = p0[6];
       for (;;) {
         if (p===p0) {
-          path += 'z';
+          d += 'z';
           break;
         }
-        path += `L${round(p[4])} ${round(p[5])}`;
+        d += `L${round(p[4])} ${round(p[5])}`;
         if (p.length < 8) break; // for open contours
         const j = p[6]==prev ? 7 : 6;
         p = (prev = p)[j];
       }
-      const attrs = { d: path };
-      attrs[ofill ? 'fill' : 'stroke'] = c;
+      const attrs = { d };
+      attrs[opts.fill ? 'fill' : 'stroke'] = scn(p0[2]);
       return attrs;
     });
 
-  { let hull_d;
-    let h = hull[0]*2;
-    hull_d = `M${round(points[h])} ${round(points[h+1])}`;
+  { let h = hull[0]*2;
+    let d = `M${round(points[h])} ${round(points[h+1])}`;
     for (let i=hull.length; i; ) {
       h = hull[--i]*2;
-      hull_d += `L${round(points[h])} ${round(points[h+1])}`;
+      d += `L${round(points[h])} ${round(points[h+1])}`;
     }
-    hull_d += 'z';
-    g.append('path').lower().attrs({
-      d: hull_d, fill: (ofill ? scn(0) : null),
-      stroke: (ofill ? null : scn(0))
-    });
+    d += 'z';
+    const attrs = { d };
+    attrs[opts.fill ? 'fill' : 'stroke'] = scn(hull_color);
+    g.append('path').lower().attrs(attrs);
   }
 
+  if (opts.tria) { // draw triangulation
+    svg.append('path').attrs({
+      d: delaunay.render(),
+      fill: 'none', stroke: '#000', 'stroke-width': 0.5
+    });
+  }
+  if (opts.dpts) { // draw data points
+    svg.append('g').attrs({ stroke: '#000', 'stroke-width': 0.5 })
+      .selectAll('circle').data(data).join('circle')
+      .attrs(d => ({ cx: sx(d[0]), cy: sy(d[1]), r: 2, fill: sc(d[2]) }));
+  }
+  if (opts.ipts) { // draw interpolation points
+    svg.append('g').attrs({ stroke: '#fff', 'stroke-width': 0.5 })
+      .selectAll('circle').data(d3.range(cont_pts.length)).join('circle')
+      .attrs(i => ({
+        cx: c_points[i*=3], cy: c_points[++i], r: 2,
+        fill: scn(c_points[++i])
+      }));
+  }
+
+  // label axes
   g = svg.append('g').attrs({
     'font-family': 'sans-serif',
     'font-size': 12,

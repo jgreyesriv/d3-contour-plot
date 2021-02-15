@@ -85,8 +85,7 @@ ul.file-tree li:not(.exp) ul {
   #github .octo-arm{animation:octocat-wave 560ms ease-in-out}
 }
 </style>
-<script src="d3.v6.min.js"></script>
-<script src="d3-selection-multi.v1.min.js"></script>
+<script src="d3v6.js"></script>
 <script src="main.js"></script>
 </head>
 <body class="flex">
@@ -94,7 +93,10 @@ ul.file-tree li:not(.exp) ul {
 <div id="menu"></div>
 <figure id="plot"></figure>
 <div id="options" class="top">
-  <label><input id="ofill" type="checkbox" checked>Fill</label>
+  <label><input name="fill" type="checkbox" checked>Fill</label><br>
+  <label><input name="dpts" type="checkbox">Data points</label><br>
+  <label><input name="ipts" type="checkbox">Interpolation points</label><br>
+  <label><input name="tria" type="checkbox">Triangulation</label>
 </div>
 
 <a id="github" target="_blank" aria-label="View source on GitHub">
